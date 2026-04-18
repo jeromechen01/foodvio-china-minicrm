@@ -1,0 +1,2931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+<title>花花食界 CRM · v11</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+
+<style>
+:root{
+  --g:#16a34a;--gd:#14532d;--gm:#15803d;--gl:#86efac;--gp:#f0fdf4;
+  --am:#f59e0b;--ad:#d97706;
+  --ink:#111827;--sl:#374151;--ms:#6b7280;--sv:#e5e7eb;--sn:#f9fafb;
+  --wh:#fff;--rd:#dc2626;--bl:#2563eb;
+  --r:10px;--sb:228px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans SC',system-ui,sans-serif;font-size:14px;color:var(--ink);background:#f1f5f9}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+
+/* ── LOGIN PAGE ── */
+#login-page{position:fixed;inset:0;background:linear-gradient(135deg,#0f3d22 0%,#166534 40%,#15803d 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+#login-page.hidden{display:none}
+.login-box{background:#fff;border-radius:20px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 24px 80px rgba(0,0,0,.3);animation:mup .3s ease}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo-icon{width:64px;height:64px;background:linear-gradient(135deg,#22c55e,var(--g));border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 12px;box-shadow:0 8px 24px rgba(22,163,74,.4)}
+.login-logo h1{font-size:20px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.login-logo p{font-size:12px;color:var(--ms)}
+.login-field{margin-bottom:16px}
+.login-field label{display:block;font-size:12px;font-weight:600;color:var(--sl);margin-bottom:6px}
+.login-field input{width:100%;border:1.5px solid var(--sv);border-radius:10px;padding:11px 14px;font-family:inherit;font-size:14px;color:var(--ink);outline:none;transition:all .15s}
+.login-field input:focus{border-color:var(--g);box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+.login-field input.err{border-color:var(--rd)}
+.login-err{font-size:12px;color:var(--rd);margin-top:5px;min-height:18px}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--g),var(--gm));color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px;transition:all .2s;box-shadow:0 4px 14px rgba(22,163,74,.4)}
+.login-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(22,163,74,.5)}
+.login-btn:active{transform:translateY(0)}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.login-hint{text-align:center;margin-top:18px;font-size:12px;color:var(--ms)}
+.login-hint span{color:var(--g);cursor:pointer;font-weight:500}
+.login-demo{background:#f0fdf4;border:1px solid #d1fae5;border-radius:10px;padding:12px 14px;margin-top:16px;font-size:12px;color:#166534;line-height:1.8}
+.login-demo strong{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g);margin-bottom:4px}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:var(--sb);min-width:var(--sb);background:linear-gradient(180deg,#0f3d22,#14532d);display:flex;flex-direction:column;height:100vh;overflow:hidden;box-shadow:2px 0 12px rgba(0,0,0,.15);transition:transform .25s;z-index:100}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{background:#fff;border-bottom:1px solid var(--sv);padding:0 18px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+#content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+/* ── SIDEBAR ── */
+.sb-logo{padding:16px 14px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logo-row{display:flex;align-items:center;gap:10px}
+.sb-icon{width:38px;height:38px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;box-shadow:0 2px 8px rgba(22,163,74,.4)}
+.sb-name{font-size:13px;font-weight:700;color:#fff;line-height:1.2}
+.sb-sub{font-size:9px;color:rgba(255,255,255,.38);margin-top:2px;letter-spacing:.8px}
+.sb-nav{flex:1;padding:8px 6px;overflow-y:auto}
+.sb-sec{font-size:9px;font-weight:600;letter-spacing:1.8px;color:rgba(255,255,255,.28);padding:10px 8px 4px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;color:rgba(255,255,255,.58);font-size:13px;font-weight:500;margin-bottom:2px;transition:all .15s;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.09);color:#fff}
+.nav-item.active{background:linear-gradient(135deg,rgba(22,163,74,.8),rgba(21,128,61,.6));color:#fff}
+.nav-item .ni{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--am);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px}
+.sb-div{height:1px;background:rgba(255,255,255,.07);margin:6px 2px}
+.sb-stats{padding:9px 10px;background:rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;border:1px solid rgba(255,255,255,.05)}
+.sb-stat-r{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sb-stat-r:last-child{margin-bottom:0}
+.sb-stat-l{font-size:11px;color:rgba(255,255,255,.38)}
+.sb-stat-v{font-size:13px;font-weight:700;color:var(--gl)}
+.sb-foot{padding:10px 12px;border-top:1px solid rgba(255,255,255,.07);font-size:10px;color:rgba(255,255,255,.22);text-align:center;line-height:1.7}
+
+/* ── TOPBAR ── */
+.tb-left{display:flex;align-items:center;gap:10px}
+.tb-right{display:flex;align-items:center;gap:8px;position:relative}
+.tb-title{font-size:15px;font-weight:700;color:var(--ink)}
+.tb-icon{font-size:16px}
+.user-pill{display:flex;align-items:center;gap:6px;background:var(--gp);border-radius:20px;padding:4px 11px 4px 4px;cursor:pointer;border:1px solid #d1fae5;transition:all .15s;position:relative}
+.user-pill:hover{border-color:var(--gl);background:#dcfce7}
+.avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#22c55e,var(--g));color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.user-pill-name{font-size:12px;color:var(--gd);font-weight:600}
+.user-pill-arrow{font-size:10px;color:var(--ms);margin-left:2px}
+.admin-badge{font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:6px;font-weight:600;margin-left:2px}
+.alert-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;background:#fee2e2;border-radius:8px;font-size:12px;color:var(--rd);font-weight:600;cursor:pointer}
+.menu-btn{width:36px;height:36px;border:none;background:var(--sn);border-radius:8px;font-size:18px;cursor:pointer;display:none;align-items:center;justify-content:center;color:var(--sl)}
+
+/* ── USER DROPDOWN ── */
+.user-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--sv);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.12);min-width:180px;z-index:500;animation:mup .15s ease;overflow:hidden}
+.user-dropdown.hidden{display:none}
+.ud-header{padding:12px 14px;border-bottom:1px solid var(--sv);background:var(--sn)}
+.ud-name{font-size:13px;font-weight:700;color:var(--ink)}
+.ud-phone{font-size:11px;color:var(--ms);margin-top:2px}
+.ud-role{display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;margin-top:5px}
+.ud-role-admin{background:#fef3c7;color:#92400e}
+.ud-role-user{background:var(--gp);color:var(--gd)}
+.ud-item{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;font-size:13px;color:var(--sl);transition:background .1s}
+.ud-item:hover{background:var(--sn)}
+.ud-item.danger{color:var(--rd)}
+.ud-item.danger:hover{background:#fee2e2}
+.ud-sep{height:1px;background:var(--sv);margin:2px 0}
+
+/* ── PAGE WRAP ── */
+.pw{padding:18px 20px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;border:1px solid var(--sv);background:#fff;color:var(--sl);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap;line-height:1}
+.btn:hover{background:var(--sn)}
+.btn-p{background:var(--g);color:#fff;border-color:var(--g)}
+.btn-p:hover{background:var(--gm);box-shadow:0 2px 8px rgba(22,163,74,.3)}
+.btn-d{color:var(--rd);border-color:#fecaca}
+.btn-d:hover{background:#fee2e2}
+.btn-g{border-color:transparent;background:transparent;color:var(--ms)}
+.btn-g:hover{background:var(--sn);color:var(--sl);border-color:var(--sv)}
+.btn-ai{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border-color:transparent}
+.btn-ai:hover{box-shadow:0 2px 10px rgba(109,40,217,.4)}
+.btn-sm{padding:5px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── BADGES ── */
+.bdg{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.bdg-A{background:#fef3c7;color:#92400e}
+.bdg-B{background:#dbeafe;color:#1e40af}
+.bdg-C{background:#f3f4f6;color:#374151}
+.bdg-active{background:#dcfce7;color:#166534}
+.bdg-follow{background:#fef9c3;color:#854d0e}
+.bdg-pause{background:#e5e7eb;color:#6b7280}
+.bdg-coop{background:#d1fae5;color:#065f46}
+.bdg-lost{background:#fee2e2;color:#991b1b}
+.bdg-admin{background:#fef3c7;color:#92400e}
+.bdg-user{background:var(--gp);color:var(--gd)}
+.bdg-on{background:#dcfce7;color:#166534}
+.bdg-off{background:#fee2e2;color:#991b1b}
+
+/* ── STATS ROW ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px}
+.stat-card{background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:14px 16px;position:relative;overflow:hidden;transition:box-shadow .15s}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.07)}
+.stat-bar{position:absolute;top:0;left:0;right:0;height:3px}
+.stat-ico{position:absolute;right:12px;top:12px;font-size:20px;opacity:.18}
+.stat-lbl{font-size:11px;color:var(--ms);font-weight:500;margin-bottom:6px}
+.stat-val{font-size:24px;font-weight:700;line-height:1}
+.stat-sub{font-size:11px;color:var(--ms);margin-top:4px}
+
+/* ── TOOLBAR ── */
+.toolbar{background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:10px 12px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.srch{flex:1;min-width:160px;display:flex;align-items:center;gap:6px;background:var(--sn);border:1px solid var(--sv);border-radius:8px;padding:7px 11px}
+.srch:focus-within{border-color:var(--g);box-shadow:0 0 0 2px rgba(22,163,74,.1)}
+.srch input{border:none;outline:none;background:transparent;font-family:inherit;font-size:13px;color:var(--ink);width:100%}
+.fsel{border:1px solid var(--sv);background:var(--sn);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;color:var(--sl);outline:none;cursor:pointer}
+.fsel:focus{border-color:var(--g)}
+
+/* ── TABLE ── */
+.tbl-card{background:#fff;border-radius:var(--r);border:1px solid var(--sv);overflow:hidden}
+.tbl-hd{display:grid;padding:8px 14px;background:var(--sn);border-bottom:1px solid var(--sv);font-size:11px;font-weight:600;color:var(--ms);text-transform:uppercase;letter-spacing:.5px}
+.tbl-row{display:grid;padding:11px 14px;border-bottom:1px solid var(--sv);align-items:center;cursor:pointer;transition:background .1s;font-size:13px}
+.tbl-row:last-child{border-bottom:none}
+.tbl-row:hover{background:#f8fafc}
+.t-cols{grid-template-columns:1.8fr 1.3fr 1.1fr .7fr .8fr .9fr .8fr 90px}
+.co-n{font-weight:600;color:var(--ink)}
+.co-i{font-size:11px;color:var(--ms)}
+.ct-n{font-weight:500;color:var(--sl)}
+.ct-t{font-size:11px;color:var(--ms)}
+.acts{display:flex;gap:4px}
+.empty-st{text-align:center;padding:50px 20px;color:var(--ms)}
+.empty-st .ei{font-size:40px;margin-bottom:12px}
+.empty-st h3{font-size:14px;font-weight:600;color:var(--sl);margin-bottom:5px}
+
+/* ── USER MGMT TABLE ── */
+.u-cols{grid-template-columns:1.4fr 1.3fr .8fr .7fr 110px}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;backdrop-filter:blur(3px)}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:620px;border:1px solid var(--sv);margin:auto;animation:mup .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+@keyframes mup{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-hdr{padding:16px 20px 12px;border-bottom:1px solid var(--sv);display:flex;align-items:center;justify-content:space-between}
+.modal-ttl{font-size:15px;font-weight:700;color:var(--ink)}
+.modal-cls{width:28px;height:28px;border-radius:7px;border:none;background:var(--sn);color:var(--ms);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.modal-cls:hover{background:#fee2e2;color:var(--rd)}
+.modal-body{padding:16px 20px}
+.modal-ft{padding:12px 20px;border-top:1px solid var(--sv);display:flex;justify-content:flex-end;gap:8px}
+
+/* ── DETAIL HDR ── */
+.det-hdr{padding:16px 20px;background:linear-gradient(135deg,#0f3d22,var(--g));border-radius:14px 14px 0 0;color:#fff}
+.det-co{font-size:18px;font-weight:700}
+.det-meta{font-size:12px;color:rgba(255,255,255,.68);margin-top:3px}
+.det-bdgs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.det-bdg{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.info-it label{font-size:10px;font-weight:600;color:var(--ms);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+.info-it span{font-size:13px;color:var(--ink)}
+
+/* ── FORM ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:12px;font-weight:600;color:var(--sl)}
+.fg label .req{color:var(--rd);margin-left:2px}
+.fg input,.fg select,.fg textarea{border:1px solid var(--sv);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;color:var(--ink);background:#fff;outline:none;transition:border-color .15s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--g);box-shadow:0 0 0 2px rgba(22,163,74,.1)}
+.fg input.err,.fg select.err,.fg textarea.err{border-color:var(--rd)}
+.fg textarea{resize:vertical;min-height:70px}
+.err-m{font-size:11px;color:var(--rd)}
+.f-sect{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--g);padding:3px 0;border-bottom:1.5px solid #dcfce7;grid-column:1/-1;margin-bottom:1px}
+
+/* ── TIMELINE ── */
+.timeline{position:relative;padding-left:26px}
+.timeline::before{content:'';position:absolute;left:8px;top:0;bottom:0;width:1.5px;background:var(--sv)}
+.tl-item{position:relative;margin-bottom:11px}
+.tl-dot{position:absolute;left:-26px;top:4px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;border:2px solid #fff;z-index:1;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.tl-card{background:#fff;border:1px solid var(--sv);border-radius:9px;padding:11px 13px;transition:border-color .15s}
+.tl-card:hover{border-color:#cbd5e1;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.tl-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:7px;gap:7px;flex-wrap:wrap}
+.tl-bdgs{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.tl-type{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600}
+.t-ph{background:#e0f2fe;color:#0369a1}
+.t-vi{background:#dcfce7;color:#166534}
+.t-wc{background:#d1fae5;color:#065f46}
+.t-em{background:#fef9c3;color:#854d0e}
+.t-vd{background:#ede9fe;color:#6d28d9}
+.oc{padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600}
+.oc0{background:#f3f4f6;color:#6b7280}
+.oc1{background:#fef9c3;color:#854d0e}
+.oc2{background:#dbeafe;color:#1d4ed8}
+.oc3{background:#ede9fe;color:#6d28d9}
+.oc4{background:#dcfce7;color:#166534}
+.tl-meta{font-size:11px;color:var(--ms)}
+.tl-body{font-size:13px;color:var(--sl);line-height:1.65;margin-bottom:7px}
+.tl-next{background:var(--sn);border-radius:7px;padding:7px 9px;display:flex;gap:12px;flex-wrap:wrap;border:1px solid var(--sv)}
+.tl-ni{display:flex;gap:5px;align-items:flex-start}
+.tl-nl{font-size:10px;font-weight:600;color:var(--ms);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;white-space:nowrap}
+.tl-nv{font-size:12px;color:var(--sl);line-height:1.5}
+.overdue{color:var(--rd);font-weight:600}
+.soon{color:var(--ad);font-weight:600}
+
+/* ── DASHBOARD ── */
+.welcome{background:linear-gradient(135deg,#0f3d22,var(--g));border-radius:12px;padding:16px 20px;color:#fff;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+.welcome::after{content:'';position:absolute;right:-20px;top:-20px;width:120px;height:120px;background:rgba(255,255,255,.04);border-radius:50%}
+.wc-text h2{font-size:15px;font-weight:700;margin-bottom:3px;position:relative;z-index:1}
+.wc-text p{font-size:12px;color:rgba(255,255,255,.65);position:relative;z-index:1}
+.wc-ico{font-size:40px;opacity:.8;position:relative;z-index:1}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.dash-card{background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:15px 16px}
+.dash-card h4{font-size:11px;font-weight:700;color:var(--ms);margin-bottom:12px;text-transform:uppercase;letter-spacing:.8px}
+.rank-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.rank-n{width:18px;height:18px;border-radius:5px;background:var(--sn);font-size:10px;font-weight:700;color:var(--ms);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rank-n.gold{background:#fef3c7;color:#92400e}
+.rank-nm{font-size:13px;color:var(--ink);min-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-bg{flex:1;background:var(--sn);border-radius:3px;height:6px;overflow:hidden}
+.rank-fill{height:100%;background:linear-gradient(90deg,var(--g),#22c55e);border-radius:3px}
+.rank-v{font-size:12px;color:var(--ms);min-width:22px;text-align:right;font-weight:600}
+.fn-row{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.fn-lbl{font-size:12px;color:var(--sl);min-width:48px}
+.fn-bg{flex:1;background:var(--sn);border-radius:4px;height:18px;overflow:hidden}
+.fn-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:7px;font-size:11px;color:#fff;font-weight:600}
+.fn-cnt{font-size:12px;color:var(--ms);min-width:18px;text-align:right;font-weight:600}
+.act-item{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--sn)}
+.act-item:last-child{border-bottom:none}
+.act-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.act-body{flex:1;min-width:0}
+.act-ttl{font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act-sub{font-size:11px;color:var(--ms);margin-top:1px}
+
+/* ── REPORT ── */
+.rep-layout{display:grid;grid-template-columns:272px 1fr;gap:15px;align-items:start}
+.rep-cfg{background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:16px}
+.rep-preview{background:#fff;border-radius:var(--r);border:1px solid var(--sv);min-height:420px;overflow:hidden}
+.rep-content{padding:20px 24px;max-height:68vh;overflow-y:auto;font-size:13px;line-height:1.8;color:var(--sl)}
+.rep-content h1{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #dcfce7}
+.rep-content h2{font-size:13px;font-weight:700;color:var(--gd);margin:16px 0 7px;padding-left:8px;border-left:3px solid var(--g)}
+.rep-content h3{font-size:13px;font-weight:700;color:var(--ink);margin:10px 0 5px}
+.rep-content p{margin-bottom:7px}
+.rep-content ul{margin:5px 0 7px 16px}
+.rep-content li{margin-bottom:3px}
+.rep-content hr{border:none;border-top:1px solid var(--sv);margin:12px 0}
+.rep-content strong{color:var(--ink)}
+.rep-content blockquote{border-left:2px solid var(--am);padding:7px 10px;background:#fffbeb;border-radius:0 7px 7px 0;font-size:12px;color:#92400e;margin:7px 0}
+.rep-tb{padding:10px 16px;border-bottom:1px solid var(--sv);display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:var(--sn)}
+.ai-bdg{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1px solid #c4b5fd;font-size:11px;font-weight:600;color:#5b21b6}
+.stream-cur{display:inline-block;width:2px;height:13px;background:var(--g);animation:blink .7s infinite;vertical-align:text-bottom;margin-left:2px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.dots{display:flex;gap:5px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:dp 1.2s ease-in-out infinite}
+.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+@keyframes dp{0%,80%,100%{transform:scale(.5);opacity:.3}40%{transform:scale(1);opacity:1}}
+
+/* ── EXPORT ── */
+.exp-card{background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:16px;margin-bottom:12px}
+.exp-card h3{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.ptbl{width:100%;border-collapse:collapse;font-size:12px}
+.ptbl th{background:var(--sn);padding:6px 8px;text-align:left;font-weight:600;color:var(--ms);border:1px solid var(--sv);font-size:11px}
+.ptbl td{padding:6px 8px;border:1px solid var(--sv);color:var(--sl)}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;background:var(--sn);border-radius:9px;padding:3px;border:1px solid var(--sv);margin-bottom:12px}
+.tab{flex:1;text-align:center;padding:7px 10px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--ms);transition:all .15s;user-select:none}
+.tab.active{background:#fff;color:var(--g);box-shadow:0 1px 4px rgba(0,0,0,.07);font-weight:600}
+
+/* ── PAGER ── */
+.pager{display:flex;align-items:center;gap:4px;margin-top:12px;justify-content:center}
+.pg-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--sv);background:#fff;color:var(--sl);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit}
+.pg-btn:hover{border-color:var(--g);color:var(--g)}
+.pg-btn.active{background:var(--g);color:#fff;border-color:var(--g)}
+.pg-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── TOAST ── */
+#toasts{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:6px}
+.toast{display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:9px;color:#fff;font-size:13px;font-weight:500;box-shadow:0 4px 18px rgba(0,0,0,.2);animation:tin .25s ease;min-width:180px}
+@keyframes tin{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
+.tok{background:var(--g)}.terr{background:var(--rd)}.tinfo{background:var(--bl)}.tai{background:linear-gradient(135deg,#7c3aed,#6d28d9)}
+
+/* ── CONFIRM / MISC MODALS ── */
+.confirm-box{background:#fff;border-radius:14px;max-width:340px;margin:auto;margin-top:22vh;padding:28px 22px;text-align:center;animation:mup .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+
+/* ── PERMISSION BANNER ── */
+.perm-banner{background:#fffbeb;border:1px solid #fcd34d;border-radius:9px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+
+/* ── AI SUMMARY ── */
+.ai-sum-wrap{margin-top:8px;grid-column:1/-1}
+.ai-sum-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:10px;padding:13px 14px;animation:mup .2s ease}
+.ai-sum-label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--gd);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+.ai-sum-label span{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;padding:2px 7px;border-radius:6px;font-size:10px}
+.ai-sum-text{font-size:13px;color:var(--sl);line-height:1.7;margin-bottom:10px}
+.ai-sum-actions{display:flex;gap:7px;flex-wrap:wrap}
+.ai-content-wrap{position:relative}
+.ai-btn-trigger{position:absolute;right:8px;bottom:8px;z-index:2}
+.fu-content-area{width:100%;border:1px solid var(--sv);border-radius:8px;padding:8px 10px 36px 10px;font-family:inherit;font-size:13px;color:var(--ink);background:#fff;outline:none;transition:border-color .15s;resize:vertical;min-height:82px}
+.fu-content-area:focus{border-color:var(--g);box-shadow:0 0 0 2px rgba(22,163,74,.1)}
+.fu-content-area.err{border-color:var(--rd)}
+
+/* ── API KEY MODAL ── */
+.apikey-box{background:#fff;border-radius:14px;max-width:420px;margin:auto;margin-top:18vh;padding:24px;animation:mup .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.2);border:1px solid var(--sv)}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  :root{--sb:0px}
+  #sidebar{position:fixed;top:0;left:0;bottom:0;width:240px;transform:translateX(-100%);z-index:200}
+  #sidebar.open{transform:translateX(0)}
+  .menu-btn{display:flex}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .t-cols{grid-template-columns:1fr 1fr auto}
+  .tbl-hd{display:none}
+  .tbl-row{padding:10px 12px;gap:4px}
+  .rep-layout{grid-template-columns:1fr}
+  .dash-grid{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .fg.full{grid-column:1}
+  .f-sect{grid-column:1}
+  .info-grid{grid-template-columns:1fr 1fr}
+  .pw{padding:14px 14px}
+  .overlay{padding:10px}
+  .modal{max-width:100%;border-radius:12px}
+  #overlay-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:150}
+  #overlay-bg.show{display:block}
+  .u-cols{grid-template-columns:1fr 1fr auto}
+}
+@media(max-width:480px){
+  .stats-row{grid-template-columns:1fr 1fr;gap:8px}
+  .stat-card{padding:11px 12px}
+  .stat-val{font-size:20px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN PAGE ══ -->
+<div id="login-page">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">🌿</div>
+      <h1>花花食界 CRM</h1>
+      <p>客户管理系统 · 内部专用</p>
+    </div>
+    <div class="login-field">
+      <label>手机号码</label>
+      <input type="tel" id="lg-phone" placeholder="请输入登录手机号" maxlength="11"
+        oninput="document.getElementById('lg-err').textContent=''"
+        onkeydown="if(event.key==='Enter')document.getElementById('lg-pwd').focus()"/>
+      <div class="login-err" id="lg-err"></div>
+    </div>
+    <div class="login-field">
+      <label>登录密码</label>
+      <input type="password" id="lg-pwd" placeholder="请输入密码"
+        oninput="document.getElementById('lg-err').textContent=''"
+        onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <button class="login-btn" id="lg-btn" onclick="doLogin()">登 录</button>
+    <div class="login-hint">遇到问题？<span onclick="toast('请联系系统管理员重置密码','info')">联系管理员</span></div>
+    <div class="login-demo">
+      <strong>演示账号</strong>
+      管理员：13800000000 / admin888<br>
+      普通用户：13900000001 / user123（李晓梅）<br>
+      普通用户：13700000002 / user123（张伟）
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app">
+  <div id="overlay-bg" onclick="closeSidebar()"></div>
+  <aside id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-row">
+        <div class="sb-icon">🌿</div>
+        <div>
+          <div class="sb-name">花花食界</div>
+          <div class="sb-sub">CRM · 客户管理</div>
+        </div>
+      </div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-sec">功能模块</div>
+      <div class="nav-item active" data-page="dashboard" onclick="nav(this,'dashboard')">
+        <span class="ni">📊</span>仪表盘
+      </div>
+      <div class="nav-item" data-page="customers" onclick="nav(this,'customers')">
+        <span class="ni">👥</span>客户列表
+      </div>
+      <div class="nav-item" data-page="followups" onclick="nav(this,'followups')">
+        <span class="ni">📝</span>跟进记录<span class="nav-badge" id="wk-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item" data-page="report" onclick="nav(this,'report')">
+        <span class="ni">📈</span>周报生成
+      </div>
+      <div class="nav-item" data-page="export" onclick="nav(this,'export')">
+        <span class="ni">📤</span>数据导出
+      </div>
+      <!-- 仅管理员可见 -->
+      <div class="nav-item" data-page="users" id="nav-users" style="display:none" onclick="nav(this,'users')">
+        <span class="ni">⚙️</span>用户管理
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-sec">数据概览</div>
+      <div class="sb-stats">
+        <div class="sb-stat-r"><span class="sb-stat-l">总客户</span><span class="sb-stat-v" id="sb-total">0</span></div>
+        <div class="sb-stat-r"><span class="sb-stat-l">A级客户</span><span class="sb-stat-v" id="sb-a" style="color:#fcd34d">0</span></div>
+        <div class="sb-stat-r"><span class="sb-stat-l">本周跟进</span><span class="sb-stat-v" id="sb-wk" style="color:#93c5fd">0</span></div>
+        <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
+      </div>
+    </nav>
+    <div class="sb-foot">花花食界食品科技有限公司<br>© 2025 · CRM v11.0</div>
+  </aside>
+  <div id="main">
+    <div id="topbar">
+      <div class="tb-left">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <span class="tb-icon" id="tb-icon">📊</span>
+        <span class="tb-title" id="tb-title">仪表盘</span>
+      </div>
+      <div class="tb-right">
+        <div class="alert-pill" id="alert-pill" style="display:none"
+          onclick="nav(document.querySelector('[data-page=customers]'),'customers')">
+          <span id="alert-text">⚠ 0 逾期</span>
+        </div>
+        <!-- 用户头像 + 下拉菜单 -->
+        <div class="user-pill" onclick="toggleUserDropdown(event)">
+          <div class="avatar" id="av-char">?</div>
+          <span class="user-pill-name" id="uname-lbl">登录中</span>
+          <span id="av-admin-badge" class="admin-badge" style="display:none">管理员</span>
+          <span class="user-pill-arrow">▾</span>
+        </div>
+        <div class="user-dropdown hidden" id="user-dropdown">
+          <div class="ud-header">
+            <div class="ud-name" id="ud-name">—</div>
+            <div class="ud-phone" id="ud-phone">—</div>
+            <span class="ud-role" id="ud-role">—</span>
+          </div>
+          <div class="ud-item" onclick="closeDropdown();nav(document.querySelector('[data-page=users]'),'users')" id="ud-mgr-link" style="display:none">
+            ⚙️ 用户管理
+          </div>
+          <div class="ud-item" onclick="closeDropdown();openApiKeyModal()">
+            🔑 API Key 设置
+          </div>
+          <div class="ud-sep"></div>
+          <div class="ud-item danger" onclick="doLogout()">🚪 退出登录</div>
+        </div>
+      </div>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// ── 常量 & 工具函数
+// ══════════════════════════════════════════════════════════
+const SK='huahua_crm_v6', UK='huahua_users', SK_SESSION='huahua_session';
+const gid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const today=()=>new Date().toISOString().slice(0,10);
+const fd=d=>d?d.slice(0,10):'—';
+const du=d=>d?Math.ceil((new Date(d)-new Date(today()))/86400000):null;
+const WD=['日','一','二','三','四','五','六'];
+function h(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s||'').replace(/"/g,'""');}
+
+// ══════════════════════════════════════════════════════════
+// ── 权限 & 用户状态
+// ══════════════════════════════════════════════════════════
+let currentUser = null; // 全局当前登录用户
+
+function isAdmin(){ return currentUser && currentUser.role === 'admin'; }
+
+function visibleCustomers(){
+  // admin 看全部，普通用户只看自己的
+  if(isAdmin()) return DB.customers;
+  return DB.customers.filter(c => c.createdBy === currentUser.id);
+}
+function visibleFollowups(){
+  if(isAdmin()) return DB.followups;
+  return DB.followups.filter(f => f.createdBy === currentUser.id);
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 用户数据管理
+// ══════════════════════════════════════════════════════════
+function loadUsers(){
+  try{
+    const r=localStorage.getItem(UK);
+    if(r){ const d=JSON.parse(r); if(Array.isArray(d)&&d.length) return d; }
+  }catch(e){}
+  // 首次运行：创建默认账号
+  const defaults=[
+    {id:'u_admin',name:'系统管理员',phone:'13800000000',password:'admin888',role:'admin',createdAt:'2025-01-01',isActive:true},
+    {id:'u_lxm',name:'李晓梅',phone:'13900000001',password:'user123',role:'user',createdAt:'2025-01-01',isActive:true},
+    {id:'u_zw',name:'张伟',phone:'13700000002',password:'user123',role:'user',createdAt:'2025-01-01',isActive:true},
+  ];
+  localStorage.setItem(UK, JSON.stringify(defaults));
+  return defaults;
+}
+function saveUsers(users){ try{localStorage.setItem(UK,JSON.stringify(users));}catch(e){} }
+function getUsers(){ return loadUsers(); }
+function getUserById(id){ return getUsers().find(u=>u.id===id); }
+function getUserName(id){ const u=getUserById(id); return u?u.name:'未知用户'; }
+
+// ══════════════════════════════════════════════════════════
+// ── 种子数据 & DB
+// ══════════════════════════════════════════════════════════
+const SEED_C=[
+  {id:'c1',companyName:'绿意餐饮集团',contactName:'王建国',contactTitle:'采购总监',phone:'138-0123-4567',email:'wang@lvcai.com',city:'上海',industry:'餐饮',customerLevel:'A',status:'合作中',source:'展会',assignedTo:'李晓梅',createdBy:'u_lxm',notes:'连锁30+门店，长期合作伙伴',createdAt:'2024-11-01',updatedAt:'2025-04-10'},
+  {id:'c2',companyName:'鲜丰超市',contactName:'陈丽华',contactTitle:'总经理',phone:'139-1234-5678',email:'chen@xianfeng.com',city:'北京',industry:'商超',customerLevel:'A',status:'跟进中',source:'转介绍',assignedTo:'张伟',createdBy:'u_zw',notes:'华北超市连锁，有机食品需求旺',createdAt:'2024-12-15',updatedAt:'2025-04-08'},
+  {id:'c3',companyName:'味美电商科技',contactName:'刘洋',contactTitle:'CEO',phone:'136-1234-5678',email:'liu@weimei.com',city:'杭州',industry:'电商',customerLevel:'B',status:'跟进中',source:'网络',assignedTo:'李晓梅',createdBy:'u_lxm',notes:'天猫/京东食品类目头部商家',createdAt:'2025-01-08',updatedAt:'2025-04-05'},
+  {id:'c4',companyName:'康源食品加工厂',contactName:'赵明',contactTitle:'厂长',phone:'137-1234-5678',email:'zhao@kangyuan.com',city:'成都',industry:'食品加工',customerLevel:'B',status:'活跃',source:'自拓',assignedTo:'张伟',createdBy:'u_zw',notes:'月采购量约50吨',createdAt:'2025-01-20',updatedAt:'2025-03-28'},
+  {id:'c5',companyName:'朝阳便利连锁',contactName:'孙晓燕',contactTitle:'老板',phone:'135-1234-5678',email:'',city:'北京',industry:'其他',customerLevel:'C',status:'流失',source:'自拓',assignedTo:'李晓梅',createdBy:'u_lxm',notes:'已转竞品',createdAt:'2025-02-01',updatedAt:'2025-03-10'},
+  {id:'c6',companyName:'金牌食代餐厅',contactName:'黄志远',contactTitle:'老板',phone:'132-5678-9012',email:'huang@jpsd.com',city:'深圳',industry:'餐饮',customerLevel:'A',status:'活跃',source:'转介绍',assignedTo:'张伟',createdBy:'u_zw',notes:'粤式餐厅连锁15家，重点发展',createdAt:'2025-02-20',updatedAt:'2025-04-12'},
+];
+const SEED_F=[
+  {id:'f1',customerId:'c1',type:'拜访',content:'实地拜访总部，王总对新款有机蔬菜系列兴趣浓厚，深入讨论Q2采购计划和账期安排。',outcome:'报价阶段',nextAction:'发送详细报价单',nextFollowUpDate:'2025-04-18',createdBy:'u_lxm',createdByName:'李晓梅',createdAt:'2025-04-10'},
+  {id:'f2',customerId:'c2',type:'电话',content:'陈总反馈领导层已正面回应，需要供应链资质证明文件。',outcome:'有意向',nextAction:'整理食品安全认证文件发送',nextFollowUpDate:'2025-04-20',createdBy:'u_zw',createdByName:'张伟',createdAt:'2025-04-08'},
+  {id:'f3',customerId:'c3',type:'微信',content:'刘总对产品目录感兴趣，询问批量折扣和账期，已发送电商合作专属方案。',outcome:'确认需求',nextAction:'安排视频会议讨论合作细节',nextFollowUpDate:'2025-04-22',createdBy:'u_lxm',createdByName:'李晓梅',createdAt:'2025-04-05'},
+  {id:'f4',customerId:'c1',type:'视频会议',content:'三方会议讨论账期，双方在90天账期上初步共识，待财务审批。',outcome:'报价阶段',nextAction:'提交账期审批，预计3个工作日',nextFollowUpDate:'2025-04-15',createdBy:'u_lxm',createdByName:'李晓梅',createdAt:'2025-04-01'},
+  {id:'f5',customerId:'c4',type:'电话',content:'首次致电赵厂长，介绍产品线，约好发产品手册。',outcome:'无进展',nextAction:'发送产品手册和公司介绍PPT',nextFollowUpDate:'2025-04-25',createdBy:'u_zw',createdByName:'张伟',createdAt:'2025-03-28'},
+  {id:'f6',customerId:'c2',type:'拜访',content:'携样品赴总部，陈总试吃5款产品，口感和包装评价很高。',outcome:'有意向',nextAction:'准备采购合同模板',nextFollowUpDate:'2025-04-12',createdBy:'u_zw',createdByName:'张伟',createdAt:'2025-03-20'},
+  {id:'f7',customerId:'c6',type:'拜访',content:'黄老板带参观旗舰店，对预制菜产品线非常感兴趣，希望独家合作。',outcome:'确认需求',nextAction:'准备独家合作方案',nextFollowUpDate:'2025-04-19',createdBy:'u_zw',createdByName:'张伟',createdAt:'2025-04-12'},
+];
+
+let DB={customers:[],followups:[]};
+
+function loadDB(){
+  try{const r=localStorage.getItem(SK);if(r){const d=JSON.parse(r);if(d&&d.customers){DB=d;return;}}}catch(e){}
+  DB={customers:[...SEED_C],followups:[...SEED_F]};
+}
+function saveDB(){try{localStorage.setItem(SK,JSON.stringify(DB));}catch(e){}}
+function isOverdue(c){return c.updatedAt&&du(c.updatedAt)<-14&&c.status!=='流失';}
+
+// ══════════════════════════════════════════════════════════
+// ── CSS 映射
+// ══════════════════════════════════════════════════════════
+const T_CSS={'电话':'t-ph','拜访':'t-vi','微信':'t-wc','邮件':'t-em','视频会议':'t-vd'};
+const T_ICO={'电话':'📞','拜访':'🚶','微信':'💬','邮件':'📧','视频会议':'🖥️'};
+const T_DOT={'电话':'#0369a1','拜访':'#16a34a','微信':'#065f46','邮件':'#d97706','视频会议':'#6d28d9'};
+const OC_CSS={'无进展':'oc0','有意向':'oc1','确认需求':'oc2','报价阶段':'oc3','签约成功':'oc4'};
+const LV_CSS={A:'bdg-A',B:'bdg-B',C:'bdg-C'};
+const ST_CSS={'活跃':'bdg-active','跟进中':'bdg-follow','合作中':'bdg-coop','成交':'bdg-coop','暂停':'bdg-pause','流失':'bdg-lost'};
+
+// ══════════════════════════════════════════════════════════
+// ── Toast
+// ══════════════════════════════════════════════════════════
+function toast(msg,type='ok'){
+  const w=document.getElementById('toasts');
+  const el=document.createElement('div');
+  el.className=`toast t${type}`;
+  el.innerHTML=`<span>${type==='ok'?'✓':type==='err'?'✕':type==='ai'?'🤖':'ℹ'}</span> ${msg}`;
+  w.appendChild(el);
+  setTimeout(()=>{el.style.animation='tin .2s ease reverse';setTimeout(()=>el.remove(),200);},3200);
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 登录 / 登出
+// ══════════════════════════════════════════════════════════
+function doLogin(){
+  const phone=document.getElementById('lg-phone').value.trim();
+  const pwd=document.getElementById('lg-pwd').value;
+  const errEl=document.getElementById('lg-err');
+  const btn=document.getElementById('lg-btn');
+  if(!phone){errEl.textContent='请输入手机号码';return;}
+  if(!pwd){errEl.textContent='请输入密码';return;}
+  const users=getUsers();
+  const user=users.find(u=>u.phone===phone&&u.password===pwd);
+  if(!user){errEl.textContent='手机号或密码错误，请重试';return;}
+  if(!user.isActive){errEl.textContent='账号已被禁用，请联系管理员';return;}
+  // 登录成功
+  currentUser=user;
+  try{sessionStorage.setItem(SK_SESSION,JSON.stringify(user));}catch(e){}
+  document.getElementById('login-page').classList.add('hidden');
+  initApp();
+  toast(`欢迎回来，${user.name}！`);
+}
+
+function doLogout(){
+  closeDropdown();
+  openConfirm('确定要退出登录吗？',()=>{
+    currentUser=null;
+    try{sessionStorage.removeItem(SK_SESSION);}catch(e){}
+    document.getElementById('login-page').classList.remove('hidden');
+    document.getElementById('lg-phone').value='';
+    document.getElementById('lg-pwd').value='';
+    document.getElementById('lg-err').textContent='';
+    closeModal();
+  });
+}
+
+function restoreSession(){
+  try{
+    const s=sessionStorage.getItem(SK_SESSION);
+    if(s){
+      const user=JSON.parse(s);
+      // 重新从用户表读取最新信息
+      const fresh=getUsers().find(u=>u.id===user.id&&u.isActive);
+      if(fresh){currentUser=fresh;return true;}
+    }
+  }catch(e){}
+  return false;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 应用初始化
+// ══════════════════════════════════════════════════════════
+function initApp(){
+  updateTopbar();
+  updateSidebar();
+  renderPage('dashboard');
+  // 设置 nav active
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  document.querySelector('[data-page=dashboard]').classList.add('active');
+  document.getElementById('tb-icon').textContent='📊';
+  document.getElementById('tb-title').textContent='仪表盘';
+}
+
+function updateTopbar(){
+  if(!currentUser)return;
+  document.getElementById('av-char').textContent=currentUser.name[0]||'?';
+  document.getElementById('uname-lbl').textContent=currentUser.name;
+  const adminBadge=document.getElementById('av-admin-badge');
+  adminBadge.style.display=isAdmin()?'inline-flex':'none';
+  // 下拉菜单
+  document.getElementById('ud-name').textContent=currentUser.name;
+  document.getElementById('ud-phone').textContent=currentUser.phone;
+  const roleEl=document.getElementById('ud-role');
+  roleEl.textContent=isAdmin()?'超级管理员':'普通用户';
+  roleEl.className=`ud-role ${isAdmin()?'ud-role-admin':'ud-role-user'}`;
+  document.getElementById('ud-mgr-link').style.display=isAdmin()?'flex':'none';
+  // 用户管理菜单
+  document.getElementById('nav-users').style.display=isAdmin()?'flex':'none';
+}
+
+function updateSidebar(){
+  const vc=visibleCustomers();
+  const vf=visibleFollowups();
+  const wr=weekRange();
+  const wk=vf.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to).length;
+  const ov=vc.filter(isOverdue).length;
+  document.getElementById('sb-total').textContent=vc.length;
+  document.getElementById('sb-a').textContent=vc.filter(c=>c.customerLevel==='A').length;
+  document.getElementById('sb-wk').textContent=wk;
+  document.getElementById('sb-ov').textContent=ov;
+  const badge=document.getElementById('wk-badge');
+  if(wk>0){badge.textContent=wk;badge.style.display='inline';}else{badge.style.display='none';}
+  const ap=document.getElementById('alert-pill');
+  if(ov>0){ap.style.display='flex';document.getElementById('alert-text').textContent=`⚠ ${ov} 逾期`;}else{ap.style.display='none';}
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 下拉菜单
+// ══════════════════════════════════════════════════════════
+function toggleUserDropdown(e){
+  e.stopPropagation();
+  const dd=document.getElementById('user-dropdown');
+  dd.classList.toggle('hidden');
+}
+function closeDropdown(){document.getElementById('user-dropdown').classList.add('hidden');}
+document.addEventListener('click',()=>closeDropdown());
+
+// ══════════════════════════════════════════════════════════
+// ── NAV & SIDEBAR
+// ══════════════════════════════════════════════════════════
+let curPage='dashboard';
+const PAGE_META={
+  dashboard:{icon:'📊',title:'仪表盘'},
+  customers:{icon:'👥',title:'客户列表'},
+  followups:{icon:'📝',title:'跟进记录'},
+  report:{icon:'📈',title:'周报生成'},
+  export:{icon:'📤',title:'数据导出'},
+  users:{icon:'⚙️',title:'用户管理'},
+};
+function weekRange(){
+  const n=new Date(),day=n.getDay()||7,m=new Date(n);
+  m.setDate(n.getDate()-day+1);
+  const s=new Date(m);s.setDate(m.getDate()+6);
+  return{from:m.toISOString().slice(0,10),to:s.toISOString().slice(0,10)};
+}
+function lastWeekRange(){
+  const w=weekRange(),s=new Date(w.from),e=new Date(w.to);
+  s.setDate(s.getDate()-7);e.setDate(e.getDate()-7);
+  return{from:s.toISOString().slice(0,10),to:e.toISOString().slice(0,10)};
+}
+function nav(el,page){
+  // 权限检查
+  if(page==='users'&&!isAdmin()){toast('无权限访问','err');return;}
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  if(el)el.classList.add('active');
+  curPage=page;
+  const m=PAGE_META[page];
+  document.getElementById('tb-icon').textContent=m.icon;
+  document.getElementById('tb-title').textContent=m.title;
+  updateSidebar();
+  renderPage(page);
+  closeSidebar();
+}
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay-bg').classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay-bg').classList.remove('show');
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 页面渲染引擎
+// ══════════════════════════════════════════════════════════
+function renderPage(p){
+  const c=document.getElementById('content');
+  if(p==='dashboard')c.innerHTML=renderDash();
+  else if(p==='customers')c.innerHTML=renderCustomers();
+  else if(p==='followups')c.innerHTML=renderFollowups();
+  else if(p==='report')c.innerHTML=renderReport();
+  else if(p==='export')c.innerHTML=renderExport();
+  else if(p==='users')c.innerHTML=renderUsers();
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 时间线卡片
+// ══════════════════════════════════════════════════════════
+function tlCard(f,showCo,showActions){
+  const c=DB.customers.find(x=>x.id===f.customerId);
+  const days=f.nextFollowUpDate?du(f.nextFollowUpDate):null;
+  let daysTxt='';
+  if(days!==null){
+    if(days<0)daysTxt=`<span class="overdue">⚠ 逾期${Math.abs(days)}天 </span>`;
+    else if(days===0)daysTxt='<span class="soon">📅今天 </span>';
+    else if(days<=3)daysTxt=`<span class="soon">⏰${days}天后 </span>`;
+  }
+  // 判断是否可操作（admin 或 本人）
+  const canEdit=isAdmin()||(currentUser&&f.createdBy===currentUser.id);
+  return `<div class="tl-item">
+  <div class="tl-dot" style="background:${T_DOT[f.type]||'#6b7280'}">${T_ICO[f.type]||'·'}</div>
+  <div class="tl-card">
+    <div class="tl-top">
+      <div class="tl-bdgs">
+        <span class="tl-type ${T_CSS[f.type]||''}">${T_ICO[f.type]} ${h(f.type)}</span>
+        <span class="oc ${OC_CSS[f.outcome]||'oc0'}">${h(f.outcome)}</span>
+        ${showCo&&c?`<span style="font-size:12px;font-weight:700;color:#16a34a">${h(c.companyName)}</span>`:''}
+        <span class="tl-meta">${fd(f.createdAt)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+        <span style="font-size:11px;color:var(--ms)">👤 ${h(f.createdByName||getUserName(f.createdBy))}</span>
+        ${showActions&&canEdit?`<button class="btn btn-g btn-sm" onclick="editFU('${f.id}')">编辑</button><button class="btn btn-d btn-sm" onclick="delFU('${f.id}')">删除</button>`:''}
+      </div>
+    </div>
+    <p class="tl-body">${h(f.content)}</p>
+    ${(f.nextAction||f.nextFollowUpDate)?`<div class="tl-next">
+      ${f.nextAction?`<div class="tl-ni"><span class="tl-nl">下一步</span><span class="tl-nv">${h(f.nextAction)}</span></div>`:''}
+      ${f.nextFollowUpDate?`<div class="tl-ni"><span class="tl-nl">计划日期</span><span class="tl-nv">${daysTxt}${fd(f.nextFollowUpDate)}</span></div>`:''}
+    </div>`:''}
+  </div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 仪表盘
+// ══════════════════════════════════════════════════════════
+function renderDash(){
+  const vc=visibleCustomers(), vf=visibleFollowups();
+  const wr=weekRange();
+  const wkFU=vf.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to);
+  const ov=vc.filter(isOverdue).length;
+  const wkd=WD[new Date().getDay()];
+  const hr=new Date().getHours();
+  const gr=hr<11?'早上好':hr<14?'中午好':hr<18?'下午好':'晚上好';
+  const mgrs={};
+  wkFU.forEach(f=>{const c=DB.customers.find(x=>x.id===f.customerId);if(c){const nm=f.createdByName||getUserName(f.createdBy);mgrs[nm]=(mgrs[nm]||0)+1;}});
+  const mgrList=Object.entries(mgrs).sort((a,b)=>b[1]-a[1]);
+  const maxM=mgrList[0]?.[1]||1;
+  const fn=[
+    {l:'活跃',cnt:vc.filter(c=>c.status==='活跃').length,col:'#3b82f6'},
+    {l:'跟进中',cnt:vc.filter(c=>c.status==='跟进中').length,col:'#f59e0b'},
+    {l:'合作中',cnt:vc.filter(c=>c.status==='合作中').length,col:'#10b981'},
+    {l:'成交',cnt:vc.filter(c=>c.status==='成交').length,col:'#059669'},
+    {l:'流失',cnt:vc.filter(c=>c.status==='流失').length,col:'#dc2626'},
+  ];
+  const maxF=Math.max(...fn.map(x=>x.cnt),1);
+  const n7=new Date();n7.setDate(n7.getDate()+7);const n7s=n7.toISOString().slice(0,10);
+  const upcoming=vf.filter(f=>f.nextFollowUpDate&&f.nextFollowUpDate>=today()&&f.nextFollowUpDate<=n7s)
+    .sort((a,b)=>a.nextFollowUpDate.localeCompare(b.nextFollowUpDate)).slice(0,4);
+  const recentFU=[...vf].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,5);
+  const scopeNote=isAdmin()?'全公司数据':'仅显示我的数据';
+  const stats=[
+    {l:'客户总数',v:vc.length,s:`A级 ${vc.filter(c=>c.customerLevel==='A').length} 家`,col:'#16a34a',ico:'👥'},
+    {l:'本周跟进',v:wkFU.length,s:`覆盖 ${new Set(wkFU.map(f=>f.customerId)).size} 家`,col:'#2563eb',ico:'📞'},
+    {l:'合作/成交',v:vc.filter(c=>c.status==='合作中'||c.status==='成交').length,s:'正式合作客户',col:'#059669',ico:'🤝'},
+    {l:'待跟进预警',v:ov,s:'超14天未联系',col:ov>0?'#dc2626':'#16a34a',ico:'⚠️'},
+  ];
+  return `<div class="pw">
+  <div class="welcome">
+    <div class="wc-text">
+      <h2>${gr}，${h(currentUser?.name||'用户')}！今天 ${today()} 星期${wkd}</h2>
+      <p>花花食界 CRM · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 🌿</p>
+    </div>
+    <div class="wc-ico">🌿</div>
+  </div>
+  <div class="stats-row">
+    ${stats.map(s=>`<div class="stat-card"><div class="stat-bar" style="background:${s.col}"></div><div class="stat-ico">${s.ico}</div><div class="stat-lbl">${s.l}</div><div class="stat-val" style="color:${s.col}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('')}
+  </div>
+  <div class="dash-grid">
+    <div class="dash-card">
+      <h4>📊 客户状态分布</h4>
+      ${fn.map(f=>`<div class="fn-row"><span class="fn-lbl">${f.l}</span><div class="fn-bg"><div class="fn-fill" style="width:${Math.max(f.cnt/maxF*100,5)}%;background:${f.col}">${f.cnt>0?f.cnt:''}</div></div><span class="fn-cnt">${f.cnt}</span></div>`).join('')}
+    </div>
+    <div class="dash-card">
+      <h4>🏆 本周跟进排行</h4>
+      ${mgrList.length===0?`<div style="text-align:center;color:var(--ms);padding:20px 0"><div style="font-size:28px;margin-bottom:8px">📋</div>本周暂无跟进</div>`:
+        mgrList.map(([m,v],i)=>`<div class="rank-row"><div class="rank-n${i===0?' gold':''}">${i+1}</div><span class="rank-nm">${h(m)}</span><div class="rank-bg"><div class="rank-fill" style="width:${v/maxM*100}%"></div></div><span class="rank-v">${v}次</span></div>`).join('')}
+    </div>
+    <div class="dash-card">
+      <h4>📅 近7天待跟进</h4>
+      ${upcoming.length===0?`<div style="text-align:center;color:var(--ms);padding:20px 0"><div style="font-size:28px;margin-bottom:8px">✅</div>近期无计划</div>`:
+        upcoming.map(f=>{const c=DB.customers.find(x=>x.id===f.customerId);const days=du(f.nextFollowUpDate);
+          return `<div class="act-item"><div class="act-ico" style="background:${days===0?'#dcfce7':days<=2?'#fef9c3':'#f0f9ff'}">${days===0?'📌':days<=2?'⏰':'📅'}</div><div class="act-body"><div class="act-ttl">${h(c?.companyName||'未知')} · ${h(f.createdByName||getUserName(f.createdBy))}</div><div class="act-sub">${h(f.nextAction||'待跟进')} · ${days===0?'今天':days===1?'明天':days+'天后'}</div></div></div>`;}).join('')}
+    </div>
+    <div class="dash-card">
+      <h4>🕐 最近跟进动态</h4>
+      ${recentFU.map(f=>{const c=DB.customers.find(x=>x.id===f.customerId);
+        return `<div class="act-item"><div class="act-ico" style="background:#f0fdf4;font-size:14px">${T_ICO[f.type]||'📋'}</div><div class="act-body"><div class="act-ttl">${h(c?.companyName||'未知')} — ${h(f.type)}</div><div class="act-sub">${h(f.createdByName||getUserName(f.createdBy))} · ${fd(f.createdAt)} · <span class="oc ${OC_CSS[f.outcome]||'oc0'}" style="font-size:10px">${h(f.outcome)}</span></div></div></div>`;}).join('')}
+    </div>
+  </div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 客户列表
+// ══════════════════════════════════════════════════════════
+let cFilter={q:'',st:'',lv:'',mgr:'',page:1};
+const CPS=10;
+
+function renderCustomers(){
+  const vc=visibleCustomers();
+  const mgrs=isAdmin()?[...new Set(DB.customers.map(c=>c.assignedTo).filter(Boolean))]:[];
+  let list=vc.filter(c=>{
+    const q=cFilter.q.toLowerCase();
+    if(q&&!c.companyName.toLowerCase().includes(q)&&!c.contactName.toLowerCase().includes(q)&&!c.phone.includes(q)&&!(c.city||'').toLowerCase().includes(q))return false;
+    if(cFilter.st&&c.status!==cFilter.st)return false;
+    if(cFilter.lv&&c.customerLevel!==cFilter.lv)return false;
+    if(cFilter.mgr&&c.assignedTo!==cFilter.mgr)return false;
+    return true;
+  }).sort((a,b)=>{const o={A:0,B:1,C:2};return(o[a.customerLevel]||2)-(o[b.customerLevel]||2)||b.updatedAt?.localeCompare(a.updatedAt||'');});
+  const total=list.length,pages=Math.ceil(total/CPS);
+  if(cFilter.page>pages&&pages>0)cFilter.page=pages;
+  const paged=list.slice((cFilter.page-1)*CPS,cFilter.page*CPS);
+  const stats=[
+    {l:'客户总数',v:vc.length,s:`本月新增 ${vc.filter(c=>c.createdAt>=today().slice(0,7)).length} 家`,col:'#16a34a',ico:'👥'},
+    {l:'A级重点',v:vc.filter(c=>c.customerLevel==='A').length,s:`占比 ${vc.length?Math.round(vc.filter(c=>c.customerLevel==='A').length/vc.length*100):0}%`,col:'#f59e0b',ico:'⭐'},
+    {l:'合作/成交',v:vc.filter(c=>c.status==='合作中'||c.status==='成交').length,s:'正式合作',col:'#059669',ico:'🤝'},
+    {l:'意向/跟进中',v:vc.filter(c=>c.status==='跟进中'||c.status==='活跃').length,s:'待转化',col:'#2563eb',ico:'🎯'},
+  ];
+  return `<div class="pw">
+  ${!isAdmin()?`<div class="perm-banner">🔒 当前仅显示您创建的客户（共 ${vc.length} 条）。如需查看全部数据请联系管理员。</div>`:''}
+  <div class="stats-row">
+    ${stats.map(s=>`<div class="stat-card"><div class="stat-bar" style="background:${s.col}"></div><div class="stat-ico">${s.ico}</div><div class="stat-lbl">${s.l}</div><div class="stat-val" style="color:${s.col}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('')}
+  </div>
+  <div class="toolbar">
+    <div class="srch"><span>🔍</span><input id="c-srch" placeholder="搜索公司、联系人、手机、城市..." value="${h(cFilter.q)}" oninput="cFilter.q=this.value;cFilter.page=1;refreshCustomers()"></div>
+    <select class="fsel" onchange="cFilter.st=this.value;cFilter.page=1;refreshCustomers()">
+      <option value="" ${!cFilter.st?'selected':''}>全部状态</option>
+      ${['活跃','跟进中','暂停','合作中','成交','流失'].map(s=>`<option value="${s}" ${cFilter.st===s?'selected':''}>${s}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="cFilter.lv=this.value;cFilter.page=1;refreshCustomers()">
+      <option value="" ${!cFilter.lv?'selected':''}>全部级别</option>
+      ${['A','B','C'].map(s=>`<option value="${s}" ${cFilter.lv===s?'selected':''}>${s}级</option>`).join('')}
+    </select>
+    ${isAdmin()&&mgrs.length?`<select class="fsel" onchange="cFilter.mgr=this.value;cFilter.page=1;refreshCustomers()">
+      <option value="" ${!cFilter.mgr?'selected':''}>全部经理</option>
+      ${mgrs.map(m=>`<option value="${m}" ${cFilter.mgr===m?'selected':''}>${h(m)}</option>`).join('')}
+    </select>`:''}
+    ${(cFilter.q||cFilter.st||cFilter.lv||cFilter.mgr)?`<button class="btn btn-g btn-sm" onclick="cFilter={q:'',st:'',lv:'',mgr:'',page:1};refreshCustomers()">× 清除</button>`:''}
+    <button class="btn btn-p btn-sm" style="margin-left:auto" onclick="openCustForm(null)">+ 新增客户</button>
+  </div>
+  <div class="tbl-card">
+    <div class="tbl-hd t-cols"><span>公司/行业</span><span>联系人</span><span>手机</span><span>级别</span><span>状态</span><span>最后跟进</span><span>负责人</span><span>操作</span></div>
+    ${paged.length===0?`<div class="empty-st"><div class="ei">🔍</div><h3>暂无匹配客户</h3><p>尝试修改筛选，或新增客户</p></div>`:
+      paged.map(c=>{const canEdit=isAdmin()||c.createdBy===currentUser?.id;
+        return `<div class="tbl-row t-cols" style="border-left:3px solid ${isOverdue(c)?'#dc2626':'transparent'}" onclick="openCustDetail('${c.id}')">
+        <div><div class="co-n">${h(c.companyName)}</div><div class="co-i">${h(c.industry||'—')} · ${h(c.city||'—')}</div></div>
+        <div><div class="ct-n">${h(c.contactName)}</div><div class="ct-t">${h(c.contactTitle||'—')}</div></div>
+        <span style="font-size:12px;color:var(--sl)">${h(c.phone)}</span>
+        <span><span class="bdg ${LV_CSS[c.customerLevel]||'bdg-C'}">${c.customerLevel}级</span></span>
+        <span><span class="bdg ${ST_CSS[c.status]||''}">${h(c.status)}</span></span>
+        <span style="font-size:11px;color:${isOverdue(c)?'#dc2626':'var(--ms)'}">${isOverdue(c)?'⚠ ':''}${fd(c.updatedAt)}</span>
+        <span style="font-size:12px;color:var(--sl);font-weight:500">${h(c.assignedTo||'—')}</span>
+        <div class="acts" onclick="event.stopPropagation()">
+          ${canEdit?`<button class="btn btn-sm" onclick="openCustForm('${c.id}')">编辑</button>
+          <button class="btn btn-d btn-sm" onclick="confirmDelCust('${c.id}')">删除</button>`:`<span style="font-size:11px;color:var(--ms)">只读</span>`}
+        </div>
+      </div>`;}).join('')}
+  </div>
+  ${pages>1?`<div class="pager">
+    <button class="pg-btn" ${cFilter.page===1?'disabled':''} onclick="cFilter.page--;refreshCustomers()">‹</button>
+    ${Array.from({length:pages},(_,i)=>i+1).map(p=>`<button class="pg-btn${cFilter.page===p?' active':''}" onclick="cFilter.page=${p};refreshCustomers()">${p}</button>`).join('')}
+    <button class="pg-btn" ${cFilter.page===pages?'disabled':''} onclick="cFilter.page++;refreshCustomers()">›</button>
+    <span style="font-size:11px;color:var(--ms);margin-left:7px">共${total}条</span>
+  </div>`:''}
+</div>`;
+}
+function refreshCustomers(){document.getElementById('content').innerHTML=renderCustomers();}
+
+// ══════════════════════════════════════════════════════════
+// ── 跟进记录
+// ══════════════════════════════════════════════════════════
+let fFilter={cust:'',type:'',by:'',from:'',to:'',oc:'',page:1};
+const FPS=8;
+
+function renderFollowups(){
+  const vf=visibleFollowups();
+  const vc=visibleCustomers();
+  const bys=isAdmin()?[...new Set(DB.followups.map(f=>f.createdByName||getUserName(f.createdBy)).filter(Boolean))]:[];
+  const wr=weekRange();
+  let list=vf.filter(f=>{
+    if(fFilter.cust&&f.customerId!==fFilter.cust)return false;
+    if(fFilter.type&&f.type!==fFilter.type)return false;
+    if(fFilter.by){const nm=f.createdByName||getUserName(f.createdBy);if(nm!==fFilter.by)return false;}
+    if(fFilter.from&&f.createdAt<fFilter.from)return false;
+    if(fFilter.to&&f.createdAt>fFilter.to)return false;
+    if(fFilter.oc&&f.outcome!==fFilter.oc)return false;
+    return true;
+  }).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const total=list.length,pages=Math.ceil(total/FPS);
+  if(fFilter.page>pages&&pages>0)fFilter.page=pages;
+  const paged=list.slice((fFilter.page-1)*FPS,fFilter.page*FPS);
+  const wkCnt=vf.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to).length;
+  const stats=[
+    {l:'跟进总次数',v:vf.length,s:'全部记录',col:'#16a34a',ico:'📋'},
+    {l:'本周跟进',v:wkCnt,s:`${wr.from}~${wr.to}`,col:'#2563eb',ico:'📅'},
+    {l:'有跟进计划',v:vf.filter(f=>f.nextFollowUpDate&&f.nextFollowUpDate>=today()).length,s:'已设下次日期',col:'#d97706',ico:'🎯'},
+    {l:'签约成功',v:vf.filter(f=>f.outcome==='签约成功').length,s:'成果统计',col:'#059669',ico:'🎉'},
+  ];
+  return `<div class="pw">
+  ${!isAdmin()?`<div class="perm-banner">🔒 当前仅显示您的跟进记录（共 ${vf.length} 条）。</div>`:''}
+  <div class="stats-row">
+    ${stats.map(s=>`<div class="stat-card"><div class="stat-bar" style="background:${s.col}"></div><div class="stat-ico">${s.ico}</div><div class="stat-lbl">${s.l}</div><div class="stat-val" style="color:${s.col}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('')}
+  </div>
+  <div class="toolbar">
+    <select class="fsel" onchange="fFilter.cust=this.value;fFilter.page=1;refreshFU()">
+      <option value="">全部客户</option>
+      ${vc.map(c=>`<option value="${c.id}" ${fFilter.cust===c.id?'selected':''}>${h(c.companyName)}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="fFilter.type=this.value;fFilter.page=1;refreshFU()">
+      <option value="">全部方式</option>
+      ${['电话','拜访','微信','邮件','视频会议'].map(t=>`<option value="${t}" ${fFilter.type===t?'selected':''}>${t}</option>`).join('')}
+    </select>
+    <select class="fsel" onchange="fFilter.oc=this.value;fFilter.page=1;refreshFU()">
+      <option value="">全部成果</option>
+      ${['无进展','有意向','确认需求','报价阶段','签约成功'].map(o=>`<option value="${o}" ${fFilter.oc===o?'selected':''}>${o}</option>`).join('')}
+    </select>
+    ${isAdmin()&&bys.length?`<select class="fsel" onchange="fFilter.by=this.value;fFilter.page=1;refreshFU()">
+      <option value="">全部跟进人</option>
+      ${bys.map(b=>`<option value="${b}" ${fFilter.by===b?'selected':''}>${h(b)}</option>`).join('')}
+    </select>`:''}
+    <input class="fsel" type="date" value="${fFilter.from}" onchange="fFilter.from=this.value;fFilter.page=1;refreshFU()" title="开始">
+    <input class="fsel" type="date" value="${fFilter.to}" onchange="fFilter.to=this.value;fFilter.page=1;refreshFU()" title="结束">
+    ${(fFilter.cust||fFilter.type||fFilter.by||fFilter.from||fFilter.to||fFilter.oc)?`<button class="btn btn-g btn-sm" onclick="fFilter={cust:'',type:'',by:'',from:'',to:'',oc:'',page:1};refreshFU()">× 清除</button>`:''}
+    <button class="btn btn-p btn-sm" style="margin-left:auto" onclick="openFUForm(null,'')">+ 新增跟进</button>
+  </div>
+  ${paged.length===0?`<div class="tbl-card"><div class="empty-st"><div class="ei">📋</div><h3>暂无跟进记录</h3><p>点击"新增跟进"开始记录</p></div></div>`:`
+  <div style="background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:16px 20px">
+    <div style="font-size:12px;color:var(--ms);margin-bottom:12px">共${total}条 · 第${(fFilter.page-1)*FPS+1}–${Math.min(fFilter.page*FPS,total)}条</div>
+    <div class="timeline">${paged.map(f=>tlCard(f,true,true)).join('')}</div>
+    ${pages>1?`<div class="pager">
+      <button class="pg-btn" ${fFilter.page===1?'disabled':''} onclick="fFilter.page--;refreshFU()">‹</button>
+      ${Array.from({length:pages},(_,i)=>i+1).map(p=>`<button class="pg-btn${fFilter.page===p?' active':''}" onclick="fFilter.page=${p};refreshFU()">${p}</button>`).join('')}
+      <button class="pg-btn" ${fFilter.page===pages?'disabled':''} onclick="fFilter.page++;refreshFU()">›</button>
+    </div>`:''}
+  </div>`}
+</div>`;
+}
+function refreshFU(){document.getElementById('content').innerHTML=renderFollowups();}
+
+// ══════════════════════════════════════════════════════════
+// ── 用户管理页面（仅 admin）
+// ══════════════════════════════════════════════════════════
+function renderUsers(){
+  if(!isAdmin())return`<div class="pw"><div class="perm-banner">⛔ 无权限访问此页面</div></div>`;
+  const users=getUsers();
+  return `<div class="pw">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--ink)">⚙️ 用户管理</div>
+      <div style="font-size:12px;color:var(--ms);margin-top:3px">管理系统登录账号与权限</div>
+    </div>
+    <button class="btn btn-p" onclick="openUserForm(null)">+ 新增用户</button>
+  </div>
+  <div class="tbl-card">
+    <div class="tbl-hd u-cols"><span>姓名</span><span>手机号码</span><span>权限</span><span>状态</span><span>操作</span></div>
+    ${users.length===0?`<div class="empty-st"><div class="ei">👥</div><h3>暂无用户</h3></div>`:
+      users.map(u=>`<div class="tbl-row u-cols">
+        <div>
+          <div class="ct-n">${h(u.name)}</div>
+          <div class="ct-t" style="font-size:10px">ID: ${u.id}</div>
+        </div>
+        <span style="font-size:13px;color:var(--sl)">${h(u.phone)}</span>
+        <span><span class="bdg ${u.role==='admin'?'bdg-admin':'bdg-user'}">${u.role==='admin'?'超级管理员':'普通用户'}</span></span>
+        <span><span class="bdg ${u.isActive?'bdg-on':'bdg-off'}">${u.isActive?'启用':'禁用'}</span></span>
+        <div class="acts" onclick="event.stopPropagation()">
+          <button class="btn btn-sm" onclick="openUserForm('${u.id}')">编辑</button>
+          ${u.id===currentUser?.id?`<span style="font-size:11px;color:var(--ms);padding:0 4px">当前</span>`:
+            `<button class="btn btn-d btn-sm" onclick="confirmDelUser('${u.id}')">删除</button>`}
+        </div>
+      </div>`).join('')}
+  </div>
+  <div style="margin-top:16px;padding:12px 14px;background:#f0fdf4;border-radius:9px;border:1px solid #d1fae5;font-size:12px;color:#166534;line-height:1.8">
+    💡 <strong>权限说明：</strong>超级管理员可查看编辑所有人的数据；普通用户只能管理自己创建的客户和跟进记录。<br>
+    ⚠️ 密码以明文存储，适合内部使用。如需更高安全性，请升级到服务器版本。
+  </div>
+</div>`;
+}
+
+// ── 用户表单 ──
+let editingUserId=null;
+function openUserForm(id){
+  editingUserId=id;
+  const users=getUsers();
+  const u=id?users.find(x=>x.id===id):null;
+  const v=(k,def='')=>h(u?u[k]||def:def);
+  openModal(`${id?'✏️ 编辑用户':'👤 新增用户'}`,`
+  <div class="form-grid">
+    <div class="f-sect">基本信息</div>
+    <div class="fg"><label>姓名<span class="req">*</span></label><input id="uf-name" value="${v('name')}" placeholder="请输入真实姓名"><span class="err-m" id="e-uname"></span></div>
+    <div class="fg"><label>手机号码<span class="req">*</span>（用于登录）</label><input id="uf-phone" type="tel" value="${v('phone')}" placeholder="11位手机号"><span class="err-m" id="e-uphone"></span></div>
+    <div class="fg"><label>登录密码<span class="req">*</span></label><input id="uf-pwd" type="text" value="${v('password')}" placeholder="${id?'留空则不修改':'请设置密码'}"><span class="err-m" id="e-upwd"></span></div>
+    <div class="fg"><label>权限角色<span class="req">*</span></label>
+      <select id="uf-role">
+        <option value="user" ${(!u||u.role==='user')?'selected':''}>普通用户</option>
+        <option value="admin" ${u?.role==='admin'?'selected':''}>超级管理员</option>
+      </select>
+    </div>
+    ${id?`<div class="fg"><label>账号状态</label>
+      <select id="uf-active">
+        <option value="1" ${u?.isActive?'selected':''}>启用</option>
+        <option value="0" ${!u?.isActive?'selected':''}>禁用</option>
+      </select>
+    </div>`:''}
+  </div>`,
+  `<button class="btn" onclick="closeModal()">取消</button>
+   <button class="btn btn-p" onclick="saveUser()">保存</button>`);
+}
+
+function saveUser(){
+  const users=getUsers();
+  const name=document.getElementById('uf-name')?.value.trim()||'';
+  const phone=document.getElementById('uf-phone')?.value.trim()||'';
+  const pwd=document.getElementById('uf-pwd')?.value.trim()||'';
+  const role=document.getElementById('uf-role')?.value||'user';
+  const activeEl=document.getElementById('uf-active');
+  const isActive=activeEl?activeEl.value==='1':true;
+  let ok=true;
+  if(!name){document.getElementById('e-uname').textContent='必填';ok=false;}
+  if(!phone||phone.length<11){document.getElementById('e-uphone').textContent='请输入11位手机号';ok=false;}
+  if(!editingUserId&&!pwd){document.getElementById('e-upwd').textContent='新用户必须设置密码';ok=false;}
+  // 检查手机号重复
+  const dup=users.find(u=>u.phone===phone&&u.id!==editingUserId);
+  if(dup){document.getElementById('e-uphone').textContent='该手机号已被注册';ok=false;}
+  if(!ok)return;
+  if(editingUserId){
+    const idx=users.findIndex(u=>u.id===editingUserId);
+    if(idx>=0){
+      users[idx].name=name;users[idx].phone=phone;
+      if(pwd)users[idx].password=pwd;
+      users[idx].role=role;users[idx].isActive=isActive;
+      // 同步更新 sessionStorage 中的当前用户
+      if(editingUserId===currentUser?.id){
+        currentUser=users[idx];
+        try{sessionStorage.setItem(SK_SESSION,JSON.stringify(currentUser));}catch(e){}
+        updateTopbar();
+      }
+    }
+  }else{
+    users.push({id:gid(),name,phone,password:pwd,role,createdAt:today(),isActive:true});
+  }
+  saveUsers(users);closeModal();
+  renderPage('users');updateSidebar();
+  toast(editingUserId?`用户 "${name}" 已更新`:`用户 "${name}" 创建成功`);
+}
+
+function confirmDelUser(id){
+  const u=getUsers().find(x=>x.id===id);
+  if(id===currentUser?.id){toast('不能删除当前登录账号','err');return;}
+  openConfirm(`确定删除用户 "${u?.name}"？<br><br>注意：该用户创建的客户和跟进记录数据将保留，但无法再登录系统。`,()=>{
+    const users=getUsers().filter(x=>x.id!==id);
+    saveUsers(users);closeModal();renderPage('users');
+    toast(`用户 "${u?.name}" 已删除`,'err');
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 周报页面（V9 全面升级版）
+// ══════════════════════════════════════════════════════════
+let repState={
+  mode:'thisWeek',from:'',to:'',mgr:'',depth:'standard',
+  useAI:false,apiKey:'',
+  loading:false,done:false,streaming:false,
+  report:'',                  // 当前报告内容（markdown）
+  isEditing:false,            // 是否处于编辑模式
+  isLocalDone:false,          // 本地生成是否完成（用于显示AI精炼按钮）
+  aiRefining:false,           // AI精炼中
+  source:'',                  // 'local' | 'ai' | 'upload'
+};
+
+// ── 渲染周报页面 ─────────────────────────────────────────
+function renderReport(){
+  const wr=weekRange(),lw=lastWeekRange();
+  const users=getUsers().filter(u=>u.isActive);
+  try{repState.apiKey=localStorage.getItem('huahua_ai_key')||'';}catch(e){}
+
+  // 获取当前查询范围名称（用于文件命名）
+  const scopeName=()=>{
+    if(!isAdmin())return currentUser?.name||'';
+    if(repState.mgr){const u=users.find(x=>x.id===repState.mgr);return u?.name||'';}
+    return '全体';
+  };
+
+  // 预览区工具栏
+  const previewToolbar=repState.done?`
+    <div class="rep-tb">
+      <span class="ai-bdg">
+        ${repState.source==='upload'?'📂 已上传':repState.source==='ai'?'🤖 AI生成':'📊 本地生成'}
+      </span>
+      ${repState.isLocalDone&&!repState.useAI&&!repState.isEditing?`
+        <button class="btn btn-ai btn-sm" onclick="aiRefineReport()" ${repState.aiRefining?'disabled':''} style="margin-left:6px">
+          ${repState.aiRefining?'⏳ 精炼中...':'🤖 AI精炼'}
+        </button>`:''}
+      <div style="margin-left:auto;display:flex;gap:5px;align-items:center">
+        ${repState.isEditing?`
+          <button class="btn btn-p btn-sm" onclick="saveReportEdit()">✓ 保存修改</button>
+          <button class="btn btn-sm" onclick="cancelReportEdit()">✕ 取消</button>
+        `:`
+          <button class="btn btn-sm" onclick="toggleReportEdit()">✏️ 编辑报告</button>
+          <button class="btn btn-sm" onclick="showExportDialog()">📥 导出</button>
+        `}
+      </div>
+    </div>`:'' ;
+
+  // 预览区内容
+  const previewContent=()=>{
+    if(!repState.done&&!repState.loading)
+      return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:360px;gap:12px;color:var(--ms)">
+        <div style="font-size:50px">📊</div>
+        <div style="font-size:15px;font-weight:600;color:var(--sl)">配置并生成周报</div>
+        <div style="font-size:13px">在左侧选择参数，点击生成 / 上传文件</div>
+      </div>`;
+    if(repState.loading&&!repState.streaming)
+      return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px">
+        <div style="font-size:38px">${repState.aiRefining?'✨':'🤖'}</div>
+        <div style="font-size:14px;font-weight:600;color:var(--sl)">
+          ${repState.aiRefining?'AI 正在精炼报告...':repState.useAI?'调用AI分析数据...':'整理数据...'}
+        </div>
+        <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      </div>`;
+    if(repState.report){
+      if(repState.isEditing)
+        return `<textarea id="rep-edit-ta" style="width:100%;height:calc(68vh - 20px);border:none;outline:none;padding:20px 24px;font-family:inherit;font-size:13px;line-height:1.8;color:var(--sl);resize:none;background:#fffef5">${repState.report.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>`;
+      return `<div class="rep-content" id="rep-out">
+        ${mdRender(repState.report)}
+        ${repState.streaming?'<span class="stream-cur"></span>':''}
+      </div>`;
+    }
+    return '';
+  };
+
+  return `<div class="pw">
+  <div class="rep-layout">
+
+    <!-- 左侧配置面板 -->
+    <div class="rep-cfg">
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">⚙️ 报告配置</div>
+
+      <!-- 统计周期 -->
+      <div class="fg" style="margin-bottom:11px">
+        <label>统计周期</label>
+        <select class="fsel" style="width:100%" onchange="repState.mode=this.value;document.getElementById('r-custom').style.display=this.value==='custom'?'grid':'none'">
+          <option value="thisWeek" ${repState.mode==='thisWeek'?'selected':''}>本周 (${wr.from}~${wr.to})</option>
+          <option value="lastWeek" ${repState.mode==='lastWeek'?'selected':''}>上周 (${lw.from}~${lw.to})</option>
+          <option value="custom" ${repState.mode==='custom'?'selected':''}>自定义范围</option>
+        </select>
+      </div>
+      <div id="r-custom" style="display:${repState.mode==='custom'?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:11px">
+        <div class="fg"><label>开始</label><input type="date" value="${repState.from}" onchange="repState.from=this.value"></div>
+        <div class="fg"><label>结束</label><input type="date" value="${repState.to}" onchange="repState.to=this.value"></div>
+      </div>
+
+      <!-- 汇报范围（权限控制） -->
+      <div class="fg" style="margin-bottom:11px">
+        <label>汇报范围</label>
+        ${isAdmin()?`
+        <select class="fsel" style="width:100%" onchange="repState.mgr=this.value">
+          <option value="" ${!repState.mgr?'selected':''}>📊 全体成员</option>
+          ${users.map(u=>`<option value="${u.id}" ${repState.mgr===u.id?'selected':''}>👤 ${h(u.name)}${u.id===currentUser?.id?' (我)':''}</option>`).join('')}
+        </select>`:`
+        <div style="background:var(--sn);border:1px solid var(--sv);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--sl);display:flex;align-items:center;gap:6px">
+          <div class="avatar" style="width:20px;height:20px;font-size:10px">${(currentUser?.name||'?')[0]}</div>
+          ${h(currentUser?.name||'—')} <span style="font-size:11px;color:var(--ms)">（仅限本人数据）</span>
+        </div>`}
+      </div>
+
+      <!-- 详细程度 -->
+      <div class="fg" style="margin-bottom:13px">
+        <label>详细程度</label>
+        <div style="display:flex;gap:5px;margin-top:4px">
+          ${[['brief','简报'],['standard','标准'],['detail','详细']].map(([v,l])=>`<button class="btn btn-sm${repState.depth===v?' btn-p':''}" style="flex:1;justify-content:center" onclick="repState.depth='${v}';refreshReport()">${l}</button>`).join('')}
+        </div>
+      </div>
+
+      <!-- AI 模式切换 -->
+      <div style="border-top:1px solid var(--sv);padding-top:13px;margin-bottom:13px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+          <label style="font-size:12px;font-weight:600;color:var(--sl)">🤖 直接AI生成</label>
+          <button class="btn btn-sm${repState.useAI?' btn-ai':''}" onclick="repState.useAI=!repState.useAI;refreshReport()">${repState.useAI?'✓ 已开启':'点击开启'}</button>
+        </div>
+        ${repState.useAI?`<div class="fg" style="margin-bottom:0">
+          <label style="font-size:11px">Claude API Key</label>
+          <input type="password" value="${h(repState.apiKey)}" onchange="repState.apiKey=this.value;try{localStorage.setItem('huahua_ai_key',this.value);}catch(e){}" placeholder="sk-ant-api03-..." style="font-size:12px">
+        </div>`:''}
+      </div>
+
+      <!-- 生成按钮 -->
+      <button class="btn${repState.useAI?' btn-ai':' btn-p'}" style="width:100%;justify-content:center;padding:9px;margin-bottom:8px" onclick="generateReport()" ${repState.loading||repState.aiRefining?'disabled':''}>
+        ${repState.loading?(repState.useAI?'🤖 AI生成中...':'⏳ 生成中...'):(repState.useAI?'🤖 AI直接生成':'📊 本地生成')}
+      </button>
+
+      <!-- 上传已有周报 -->
+      <button class="btn" style="width:100%;justify-content:center;padding:8px;margin-bottom:13px" onclick="document.getElementById('rep-upload').click()">
+        📂 上传已有周报
+      </button>
+      <input type="file" id="rep-upload" accept=".txt,.md,.doc,.docx" style="display:none" onchange="uploadReport(this)">
+
+      <!-- 提示 -->
+      <div style="padding:9px 10px;background:#f0fdf4;border-radius:8px;font-size:11px;color:#166534;line-height:1.7;border:1px solid #d1fae5">
+        💡 <strong>模式说明：</strong><br>
+        · 本地生成：快速汇总，可再用 AI精炼<br>
+        · AI直接生成：调用Claude，需 API Key<br>
+        · 上传：导入已有周报文件查看编辑
+      </div>
+    </div>
+
+    <!-- 右侧预览区 -->
+    <div class="rep-preview">
+      ${previewToolbar}
+      ${previewContent()}
+    </div>
+
+  </div>
+</div>`;
+}
+
+function refreshReport(){document.getElementById('content').innerHTML=renderReport();}
+
+// ── Markdown 渲染 ────────────────────────────────────────
+function mdRender(md){
+  return md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>').replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/^---$/gm,'<hr/>').replace(/^- (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>[\s\S]*?<\/li>\n?)+/g,'<ul>$&</ul>')
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    .split('\n\n').map(p=>p.startsWith('<')?p:`<p>${p}</p>`).join('');
+}
+
+// ── 获取当前日期范围字符串 ───────────────────────────────
+function getRepRange(){
+  const wr=weekRange(),lw=lastWeekRange();
+  return repState.mode==='thisWeek'?wr:repState.mode==='lastWeek'?lw:{from:repState.from,to:repState.to};
+}
+
+// ── 生成周报（本地 + AI直接生成） ────────────────────────
+async function generateReport(){
+  const r=getRepRange();
+  if(repState.mode==='custom'&&(!r.from||!r.to)){toast('请选择日期范围','err');return;}
+
+  // 权限过滤数据
+  let targetFU=DB.followups, targetC=DB.customers;
+  if(!isAdmin()){
+    targetFU=DB.followups.filter(f=>f.createdBy===currentUser?.id);
+    targetC=DB.customers.filter(c=>c.createdBy===currentUser?.id);
+  }else if(repState.mgr){
+    targetFU=DB.followups.filter(f=>f.createdBy===repState.mgr);
+  }
+
+  const fFU=targetFU.filter(f=>f.createdAt>=r.from&&f.createdAt<=r.to);
+  const cMap={};DB.customers.forEach(c=>{cMap[c.id]=c;});
+  const byMgr={};
+  fFU.forEach(f=>{
+    const nm=f.createdByName||getUserName(f.createdBy);
+    if(!byMgr[nm])byMgr[nm]={count:0,custs:new Set(),items:[]};
+    byMgr[nm].count++;byMgr[nm].custs.add(f.customerId);
+    byMgr[nm].items.push({company:cMap[f.customerId]?.companyName||'未知',type:f.type,outcome:f.outcome,content:f.content.slice(0,80),date:f.createdAt});
+  });
+  const signed=fFU.filter(f=>f.outcome==='签约成功').map(f=>cMap[f.customerId]?.companyName||'未知');
+  const overdue=targetC.filter(isOverdue).map(c=>({name:c.companyName,level:c.customerLevel,mgr:c.assignedTo,days:Math.abs(du(c.updatedAt))}));
+  const n7=new Date();n7.setDate(n7.getDate()+7);const n7s=n7.toISOString().slice(0,10);
+  const upcoming=targetFU.filter(f=>f.nextFollowUpDate&&f.nextFollowUpDate>=today()&&f.nextFollowUpDate<=n7s)
+    .map(f=>({company:cMap[f.customerId]?.companyName||'未知',mgr:f.createdByName||getUserName(f.createdBy),date:f.nextFollowUpDate,action:f.nextAction||'待跟进'}));
+  const aFU=fFU.filter(f=>cMap[f.customerId]?.customerLevel==='A');
+  const totalCusts=new Set(fFU.map(f=>f.customerId)).size;
+
+  repState.loading=true;repState.report='';repState.done=false;
+  repState.streaming=false;repState.isEditing=false;
+  repState.isLocalDone=false;repState.aiRefining=false;
+  refreshReport();
+
+  // ── AI直接生成（流式）──
+  if(repState.useAI){
+    if(!repState.apiKey.trim()){
+      toast('请先输入 Claude API Key','err');
+      repState.loading=false;refreshReport();return;
+    }
+    const users=getUsers().filter(u=>u.isActive);
+    const scopeName=repState.mgr?(users.find(u=>u.id===repState.mgr)?.name||'—'):(isAdmin()?'全体成员':(currentUser?.name||'—'));
+    const prompt=`你是花花食界食品科技有限公司的专业销售数据分析师。请根据以下CRM数据，生成一份结构完整、语言专业的中文客户跟进周报。
+
+【数据范围】${r.from} 至 ${r.to}，汇报范围：${scopeName}
+【跟进概况】本期共${fFU.length}次跟进，覆盖${totalCusts}家客户，${Object.keys(byMgr).length}位经理参与
+【签约情况】签约成功${signed.length}单${signed.length?`：${signed.join('、')}`:''}
+【逾期预警】${overdue.length}家客户超14天未跟进${overdue.length?`：${overdue.slice(0,3).map(x=>`${x.name}(${x.days}天)`).join('、')}`:''}
+【各经理数据】${Object.entries(byMgr).map(([m,i])=>`${m}：${i.count}次/${i.custs.size}家`).join('；')||'暂无'}
+【A级客户】${aFU.length?[...new Set(aFU.map(f=>f.customerId))].map(id=>cMap[id]?.companyName||'').filter(Boolean).join('、'):'本期无A级客户跟进'}
+【下周计划】${upcoming.length}项待跟进
+
+请生成包含以下五个部分的完整周报，使用markdown格式，约400-500字：
+一、本周跟进概览 二、A级重点客户动态 三、各客户经理完成情况 四、亮点与风险预警 五、下周跟进计划`;
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','x-api-key':repState.apiKey},
+        body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1500,stream:true,messages:[{role:'user',content:prompt}]})
+      });
+      if(!res.ok)throw new Error(`HTTP ${res.status}`);
+      repState.streaming=true;repState.loading=false;repState.source='ai';refreshReport();
+      const reader=res.body.getReader(),dec=new TextDecoder();let full='';
+      while(true){
+        const{done,value}=await reader.read();if(done)break;
+        for(const line of dec.decode(value).split('\n')){
+          if(!line.startsWith('data: '))continue;
+          const data=line.slice(6);if(data==='[DONE]')break;
+          try{const j=JSON.parse(data);if(j.type==='content_block_delta'&&j.delta?.text){
+            full+=j.delta.text;repState.report=full;
+            const o=document.getElementById('rep-out');
+            if(o){o.innerHTML=mdRender(full)+'<span class="stream-cur"></span>';o.scrollTop=o.scrollHeight;}
+          }}catch(e){}
+        }
+      }
+      repState.streaming=false;repState.done=true;repState.loading=false;
+      const o=document.getElementById('rep-out');if(o)o.innerHTML=mdRender(repState.report);
+      refreshReport();toast('🤖 AI周报生成完成！','ai');
+    }catch(err){
+      repState.loading=false;repState.streaming=false;refreshReport();
+      const msg=String(err);
+      toast(msg.includes('401')||msg.includes('403')?'API Key 无效，请重新设置':'AI生成失败：'+err,'err');
+    }
+    return;
+  }
+
+  // ── 本地生成 ──
+  await new Promise(res=>setTimeout(res,500));
+  let md=`# 花花食界 | 客户跟进周报\n\n`;
+  md+=`**周期：** ${r.from} ~ ${r.to}  |  **生成：** ${new Date().toLocaleString('zh-CN')}\n\n---\n\n`;
+  md+=`## 一、本周跟进概览\n\n本周期共完成 **${fFU.length}** 次跟进，覆盖 **${totalCusts}** 家客户，涉及 **${Object.keys(byMgr).length}** 位客户经理。${signed.length?`签约成功 **${signed.length}** 单。`:''}\n\n`;
+  if(!fFU.length)md+=`> ⚠ 本周期暂无跟进记录，请各客户经理及时录入。\n\n`;
+  md+=`## 二、A级重点客户动态\n\n`;
+  if(!aFU.length){md+=`本周期未记录A级客户跟进，建议加强重点客户维护频率。\n\n`;}
+  else{[...new Set(aFU.map(f=>f.customerId))].forEach(id=>{
+    const c=cMap[id];const cfu=aFU.filter(f=>f.customerId===id);if(!c)return;
+    md+=`**${c.companyName}**（${c.contactName} · ${c.status}）\n\n`;
+    cfu.forEach(f=>{md+=`- ${fd(f.createdAt)} [${f.type}] ${f.content.slice(0,80)}${f.content.length>80?'…':''} → ${f.outcome}\n`;});
+    md+='\n';
+  });}
+  md+=`## 三、各客户经理完成情况\n\n`;
+  if(!Object.keys(byMgr).length){md+=`本周期暂无数据。\n\n`;}
+  else Object.entries(byMgr).sort((a,b)=>b[1].count-a[1].count).forEach(([m,info])=>{
+    md+=`### ${m}\n跟进 **${info.count}** 次 | 覆盖 **${info.custs.size}** 家客户\n\n`;
+    if(repState.depth==='detail'){info.items.forEach(i=>{md+=`- **${i.company}** [${i.type}·${i.date}]：${i.content}\n`;});md+='\n';}
+  });
+  md+=`## 四、亮点与风险预警\n\n`;
+  if(signed.length)md+=`🎉 **签约喜讯：** 本周期签约 ${signed.length} 笔 — ${signed.map(n=>`"${n}"`).join('、')}\n\n`;
+  if(overdue.length){
+    md+=`⚠️ **流失风险：** ${overdue.length} 家客户超14天未跟进：\n\n`;
+    overdue.slice(0,5).forEach(c=>{md+=`- **${c.name}** (${c.level}级) 负责：${c.mgr} | 已 ${c.days} 天未跟进\n`;});
+    md+='\n';
+  }else{md+=`✅ 本周期无逾期未跟进客户，维护良好。\n\n`;}
+  md+=`## 五、下周跟进计划\n\n`;
+  if(!upcoming.length){md+=`暂无已设置的下次跟进计划。\n\n`;}
+  else{md+=`未来7天计划跟进 ${upcoming.length} 次：\n\n`;upcoming.slice(0,8).forEach(x=>{md+=`- **${x.date}** | ${x.company} (${x.mgr})：${x.action}\n`;});}
+  md+=`\n---\n\n*本报告由花花食界CRM系统自动生成 · v9*`;
+  repState.report=md;repState.done=true;repState.loading=false;
+  repState.isLocalDone=true;repState.source='local';
+  refreshReport();toast('周报生成成功！可点击"🤖 AI精炼"进一步优化');
+}
+
+// ── AI 精炼（本地生成后可调用）──────────────────────────
+async function aiRefineReport(){
+  if(!repState.report){toast('请先生成周报','err');return;}
+  let apiKey='';
+  try{apiKey=localStorage.getItem('huahua_ai_key')||'';}catch(e){}
+  if(!apiKey.trim()){
+    openApiKeyModal(()=>setTimeout(aiRefineReport,300));
+    return;
+  }
+  repState.aiRefining=true;repState.loading=true;
+  refreshReport();
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','x-api-key':apiKey},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-5',max_tokens:1500,
+        system:'你是专业的商业写作助理，擅长将销售报告精炼为管理层汇报材料。',
+        messages:[{role:'user',content:`请将以下销售周报精炼为更专业的管理层汇报版本，保持数据准确性，提升语言专业度，控制在600字以内，使用markdown格式：\n\n${repState.report}`}]
+      })
+    });
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const refined=data.content?.[0]?.text?.trim()||'';
+    if(!refined)throw new Error('AI未返回内容');
+    repState.report=refined;repState.source='ai';repState.isLocalDone=false;
+    toast('✨ AI精炼完成！','ai');
+  }catch(err){
+    const msg=String(err.message||err);
+    toast(msg.includes('401')||msg.includes('403')?'API Key 无效':'AI精炼失败：'+msg,'err');
+  }finally{
+    repState.aiRefining=false;repState.loading=false;
+    refreshReport();
+  }
+}
+
+// ── 编辑报告 ─────────────────────────────────────────────
+function toggleReportEdit(){
+  repState.isEditing=true;
+  refreshReport();
+  // 聚焦编辑框
+  setTimeout(()=>document.getElementById('rep-edit-ta')?.focus(),50);
+}
+function saveReportEdit(){
+  const ta=document.getElementById('rep-edit-ta');
+  if(ta){repState.report=ta.value;}
+  repState.isEditing=false;
+  refreshReport();
+  toast('报告已保存');
+}
+function cancelReportEdit(){
+  repState.isEditing=false;
+  refreshReport();
+}
+
+// ── 上传周报文件 ─────────────────────────────────────────
+function uploadReport(input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let content=e.target.result||'';
+    // .docx 是二进制，简单提示
+    if(file.name.endsWith('.docx')&&content.includes('PK')){
+      toast('.docx 格式需解析库支持，建议先另存为 .txt 再上传','err');
+      input.value='';return;
+    }
+    repState.report=content;
+    repState.done=true;repState.loading=false;repState.streaming=false;
+    repState.isEditing=false;repState.isLocalDone=false;repState.source='upload';
+    refreshReport();
+    toast(`"${file.name}" 已加载到预览区`);
+  };
+  reader.onerror=()=>toast('文件读取失败，请重试','err');
+  // .docx 用 arrayBuffer 读取以检测二进制
+  if(file.name.endsWith('.docx')){reader.readAsText(file,'utf-8');}
+  else{reader.readAsText(file,'utf-8');}
+  input.value=''; // 允许重复上传同一文件
+}
+
+// ── 导出弹窗 ─────────────────────────────────────────────
+function showExportDialog(){
+  if(!repState.report){toast('暂无报告内容可导出','err');return;}
+  const r=getRepRange();
+  const users=getUsers().filter(u=>u.isActive);
+  const scopeName=!isAdmin()?
+    (currentUser?.name||''):
+    (repState.mgr?(users.find(u=>u.id===repState.mgr)?.name||'全体'):'全体');
+  const namePart=scopeName?`_${scopeName}`:'';
+  const fileBase=`花花食界_周报${namePart}_${r.from}_${r.to}`;
+
+  const o=document.createElement('div');
+  o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:360px;margin:auto;margin-top:22vh;padding:24px;animation:mup .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.2);border:1px solid var(--sv)">
+    <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px">📥 选择导出格式</div>
+    <div style="font-size:12px;color:var(--ms);margin-bottom:18px">文件将保存至您的默认下载文件夹</div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <button class="btn" style="justify-content:flex-start;gap:12px;padding:12px 14px" onclick="doExportTxt('${fileBase}');closeModal()">
+        <span style="font-size:20px">📄</span>
+        <div style="text-align:left"><div style="font-weight:600">导出 TXT</div><div style="font-size:11px;color:var(--ms)">纯文本格式，任何设备可打开</div></div>
+      </button>
+      <button class="btn" style="justify-content:flex-start;gap:12px;padding:12px 14px" onclick="doExportDoc('${fileBase}');closeModal()">
+        <span style="font-size:20px">📊</span>
+        <div style="text-align:left"><div style="font-weight:600">导出 Word (.doc)</div><div style="font-size:11px;color:var(--ms)">可用 Word / WPS 直接打开编辑</div></div>
+      </button>
+      <button class="btn btn-p" style="justify-content:flex-start;gap:12px;padding:12px 14px" onclick="doCopyReport();closeModal()">
+        <span style="font-size:20px">📋</span>
+        <div style="text-align:left"><div style="font-weight:600">复制到剪贴板</div><div style="font-size:11px;color:rgba(255,255,255,.7)">可粘贴到微信、钉钉、邮件等</div></div>
+      </button>
+    </div>
+    <button class="btn btn-g btn-sm" style="width:100%;justify-content:center;margin-top:12px" onclick="closeModal()">取消</button>
+  </div>`;
+  document.body.appendChild(o);
+}
+
+// ── TXT 导出 ─────────────────────────────────────────────
+function doExportTxt(fileBase){
+  const b=new Blob([repState.report],{type:'text/plain;charset=utf-8'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=`${fileBase}.txt`;a.click();
+  URL.revokeObjectURL(u);
+  toast('TXT 报告已导出 ✓');
+}
+
+// ── Word (.doc) 导出 ─────────────────────────────────────
+function doExportDoc(fileBase){
+  // 将 markdown 转为 HTML，包裹在 Word 可识别的 XML 结构中
+  const htmlBody=mdRender(repState.report);
+  const wordXml=`
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8"/>
+<meta name=ProgId content=Word.Document>
+<meta name=Generator content="Microsoft Word 15">
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+<style>
+  body{font-family:"宋体",SimSun,serif;font-size:12pt;line-height:1.8;margin:2cm}
+  h1{font-size:16pt;color:#14532d;border-bottom:2px solid #16a34a;padding-bottom:6pt;margin-bottom:12pt}
+  h2{font-size:13pt;color:#14532d;border-left:4pt solid #16a34a;padding-left:8pt;margin:14pt 0 7pt}
+  h3{font-size:12pt;font-weight:bold;margin:10pt 0 5pt}
+  p{margin:5pt 0}
+  ul{margin:4pt 0 6pt 18pt}
+  li{margin-bottom:3pt}
+  hr{border:1pt solid #e5e7eb;margin:10pt 0}
+  strong{color:#111827}
+  blockquote{border-left:3pt solid #f59e0b;padding:6pt 10pt;background:#fffbeb;margin:6pt 0}
+</style>
+</head>
+<body>
+${htmlBody}
+<p style="margin-top:24pt;font-size:10pt;color:#6b7280;border-top:1pt solid #e5e7eb;padding-top:8pt">
+  花花食界食品科技有限公司 · CRM系统导出 · ${new Date().toLocaleString('zh-CN')}
+</p>
+</body></html>`.trim();
+
+  const b=new Blob(['\uFEFF'+wordXml],{type:'application/msword;charset=utf-8'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=`${fileBase}.doc`;a.click();
+  URL.revokeObjectURL(u);
+  toast('Word 报告已导出 ✓（双击用 Word/WPS 打开）');
+}
+
+// ── 复制到剪贴板 ──────────────────────────────────────────
+function doCopyReport(){
+  navigator.clipboard.writeText(repState.report)
+    .then(()=>toast('已复制到剪贴板 ✓'))
+    .catch(()=>{
+      // 降级方案
+      const ta=document.createElement('textarea');
+      ta.value=repState.report;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');ta.remove();
+      toast('已复制到剪贴板 ✓');
+    });
+}
+
+// 兼容旧的 copyReport / exportReport 调用
+function copyReport(){doCopyReport();}
+function exportReport(){showExportDialog();}
+
+// ══════════════════════════════════════════════════════════
+// ── 数据导出
+// ══════════════════════════════════════════════════════════
+let expState={tab:'customers',fSt:'',fLv:'',fMgr:'',fFrom:'',fTo:'',fuMgr:''};
+
+// ── 字段定义（CSV & Excel 共用）──────────────────────────
+const C_FIELDS=[
+  {k:'companyName',l:'公司名称'},{k:'contactName',l:'联系人'},{k:'contactTitle',l:'职位'},
+  {k:'phone',l:'手机'},{k:'email',l:'邮箱'},{k:'city',l:'城市'},{k:'industry',l:'行业'},
+  {k:'customerLevel',l:'客户级别'},{k:'status',l:'状态'},{k:'source',l:'来源'},
+  {k:'assignedTo',l:'负责经理'},{k:'updatedAt',l:'最后跟进'},{k:'createdAt',l:'创建日期'},{k:'notes',l:'备注'}
+];
+const F_FIELDS=[
+  {k:'companyName',l:'公司名称'},{k:'type',l:'跟进方式'},{k:'createdAt',l:'跟进日期'},
+  {k:'createdByName',l:'跟进人'},{k:'content',l:'跟进内容'},{k:'outcome',l:'跟进成果'},
+  {k:'nextAction',l:'下一步行动'},{k:'nextFollowUpDate',l:'下次跟进日期'}
+];
+
+function renderExport(){
+  const vc=visibleCustomers(),vf=visibleFollowups();
+  const mgrs=isAdmin()?[...new Set(DB.customers.map(c=>c.assignedTo).filter(Boolean))]:[];
+  const filtC=vc.filter(c=>{
+    if(expState.fSt&&c.status!==expState.fSt)return false;
+    if(expState.fLv&&c.customerLevel!==expState.fLv)return false;
+    if(expState.fMgr&&c.assignedTo!==expState.fMgr)return false;
+    return true;
+  });
+  const filtF=vf.filter(f=>{
+    if(expState.fFrom&&f.createdAt<expState.fFrom)return false;
+    if(expState.fTo&&f.createdAt>expState.fTo)return false;
+    if(expState.fuMgr){const nm=f.createdByName||getUserName(f.createdBy);if(nm!==expState.fuMgr)return false;}
+    return true;
+  });
+
+  return `<div class="pw">
+  <div class="tabs">
+    <div class="tab${expState.tab==='customers'?' active':''}" onclick="expState.tab='customers';refreshExport()">📋 客户数据</div>
+    <div class="tab${expState.tab==='followups'?' active':''}" onclick="expState.tab='followups';refreshExport()">📞 跟进记录</div>
+    <div class="tab${expState.tab==='import'?' active':''}" onclick="expState.tab='import';refreshExport()">📥 导入数据</div>
+  </div>
+
+  ${expState.tab==='customers'?`
+  <div class="exp-card">
+    <h3>📋 客户列表导出</h3>
+    <div class="toolbar" style="margin-bottom:11px">
+      <select class="fsel" onchange="expState.fSt=this.value;refreshExport()">
+        <option value="">全部状态</option>
+        ${['活跃','跟进中','暂停','合作中','成交','流失'].map(s=>`<option value="${s}" ${expState.fSt===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+      <select class="fsel" onchange="expState.fLv=this.value;refreshExport()">
+        <option value="">全部级别</option>
+        ${['A','B','C'].map(s=>`<option value="${s}" ${expState.fLv===s?'selected':''}>${s}级</option>`).join('')}
+      </select>
+      ${isAdmin()&&mgrs.length?`<select class="fsel" onchange="expState.fMgr=this.value;refreshExport()">
+        <option value="">全部经理</option>
+        ${mgrs.map(m=>`<option value="${m}" ${expState.fMgr===m?'selected':''}>${h(m)}</option>`).join('')}
+      </select>`:''}
+      ${(expState.fSt||expState.fLv||expState.fMgr)?`<button class="btn btn-g btn-sm" onclick="expState.fSt='';expState.fLv='';expState.fMgr='';refreshExport()">× 清除</button>`:''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--sl)">将导出 <strong style="color:#16a34a">${filtC.length}</strong> 条客户记录（${C_FIELDS.length} 个字段）</span>
+      <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap">
+        <button class="btn btn-sm" style="border-color:#16a34a;color:#16a34a" onclick="doExportC('csv')">
+          📄 导出 CSV
+        </button>
+        <button class="btn btn-p btn-sm" onclick="doExportC('xlsx')">
+          📊 导出 Excel
+        </button>
+        ${isAdmin()?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#86efac;color:#14532d;font-weight:600" onclick="doExportFull()">
+          📦 导出完整报表
+        </button>`:''}
+      </div>
+    </div>
+    ${filtC.length?`<div style="overflow-x:auto">
+      <div style="font-size:11px;color:var(--ms);margin-bottom:6px">数据预览（前5条，共 ${C_FIELDS.length} 列）</div>
+      <table class="ptbl">
+        <thead><tr><th>公司</th><th>联系人</th><th>手机</th><th>城市</th><th>级别</th><th>状态</th><th>负责人</th></tr></thead>
+        <tbody>${filtC.slice(0,5).map(c=>`<tr><td>${h(c.companyName)}</td><td>${h(c.contactName)}</td><td>${h(c.phone)}</td><td>${h(c.city||'—')}</td><td>${h(c.customerLevel)}</td><td>${h(c.status)}</td><td>${h(c.assignedTo||'—')}</td></tr>`).join('')}</tbody>
+      </table>
+      ${filtC.length>5?`<div style="font-size:11px;color:var(--ms);margin-top:5px">…及其余 ${filtC.length-5} 条</div>`:''}
+    </div>`:''}
+  </div>
+  `:`
+  <div class="exp-card">
+    <h3>📞 跟进记录导出</h3>
+    <div class="toolbar" style="margin-bottom:11px">
+      <input class="fsel" type="date" value="${expState.fFrom}" onchange="expState.fFrom=this.value;refreshExport()" title="开始日期">
+      <input class="fsel" type="date" value="${expState.fTo}" onchange="expState.fTo=this.value;refreshExport()" title="结束日期">
+      ${(expState.fFrom||expState.fTo)?`<button class="btn btn-g btn-sm" onclick="expState.fFrom='';expState.fTo='';refreshExport()">× 清除</button>`:''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--sl)">将导出 <strong style="color:#16a34a">${filtF.length}</strong> 条跟进记录（${F_FIELDS.length} 个字段）</span>
+      <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap">
+        <button class="btn btn-sm" style="border-color:#16a34a;color:#16a34a" onclick="doExportF('csv')">
+          📄 导出 CSV
+        </button>
+        <button class="btn btn-p btn-sm" onclick="doExportF('xlsx')">
+          📊 导出 Excel
+        </button>
+        ${isAdmin()?`<button class="btn btn-sm" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#86efac;color:#14532d;font-weight:600" onclick="doExportFull()">
+          📦 导出完整报表
+        </button>`:''}
+      </div>
+    </div>
+    ${filtF.length?`<div style="overflow-x:auto">
+      <div style="font-size:11px;color:var(--ms);margin-bottom:6px">数据预览（前5条）</div>
+      <table class="ptbl">
+        <thead><tr><th>公司</th><th>方式</th><th>日期</th><th>跟进人</th><th>成果</th><th>下次日期</th></tr></thead>
+        <tbody>${filtF.slice(0,5).map(f=>{const c=DB.customers.find(c=>c.id===f.customerId);return`<tr><td>${h(c?.companyName||'未知')}</td><td>${h(f.type)}</td><td>${fd(f.createdAt)}</td><td>${h(f.createdByName||getUserName(f.createdBy))}</td><td>${h(f.outcome)}</td><td>${fd(f.nextFollowUpDate)}</td></tr>`;}).join('')}</tbody>
+      </table>
+      ${filtF.length>5?`<div style="font-size:11px;color:var(--ms);margin-top:5px">…及其余 ${filtF.length-5} 条</div>`:''}
+    </div>`:''}
+  </div>
+  `}
+
+  ${expState.tab==='import'?`
+  <div class="exp-card">
+    <h3>📥 批量导入客户数据</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:var(--sn);border:1px solid var(--sv);border-radius:9px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px">🗂 从文件导入</div>
+        <div style="font-size:12px;color:var(--ms);line-height:1.7;margin-bottom:10px">
+          支持 CSV 和 Excel 格式，系统自动识别列名并映射字段。
+          导入的数据将<strong style="color:var(--g)">追加</strong>到现有客户列表，不会覆盖原有数据。
+        </div>
+        <button class="btn btn-p btn-sm" onclick="openImportModal()" style="width:100%;justify-content:center">
+          📂 选择文件导入
+        </button>
+      </div>
+      <div style="background:var(--sn);border:1px solid var(--sv);border-radius:9px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px">📋 导入规则说明</div>
+        <div style="font-size:12px;color:var(--ms);line-height:1.9">
+          ✅ <strong>必填列：</strong>公司名称、联系人、手机<br>
+          ✅ <strong>自动识别：</strong>中英文列名均支持<br>
+          ✅ <strong>数据叠加：</strong>不会删除现有数据<br>
+          ✅ <strong>格式支持：</strong>.csv / .xlsx / .xls<br>
+          ✅ <strong>编码支持：</strong>UTF-8 / GBK 自动处理
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:9px">
+      <div style="font-size:12px;color:#5b21b6;line-height:1.6">
+        💡 首次使用建议先下载模板，按模板格式填写后再导入，成功率更高。
+      </div>
+      <button class="btn btn-sm" style="color:#6d28d9;border-color:#c4b5fd;flex-shrink:0;margin-left:12px" onclick="downloadImportTemplate()">
+        ⬇️ 下载导入模板
+      </button>
+    </div>
+    <div style="margin-top:12px;padding:10px 13px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e">
+      ⚠️ 当前版本支持<strong>客户数据</strong>导入。跟进记录导入功能将在后续版本中提供。
+    </div>
+  </div>
+  `:''}
+
+  <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:9px;padding:11px 14px;font-size:12px;color:#166534;line-height:1.8">
+    💡 <strong>格式说明：</strong>
+    CSV 格式适合数据处理和二次分析；
+    Excel (.xlsx) 格式带表头样式，可直接打印或汇报；
+    ${isAdmin()?'完整报表（仅管理员）包含客户+跟进两个工作表的全量数据。':''}
+    <br>📥 <strong>导入：</strong>点击"导入数据"标签页可批量导入 CSV / Excel 客户数据并自动叠加到系统。
+  </div>
+</div>`;
+}
+
+function refreshExport(){document.getElementById('content').innerHTML=renderExport();}
+
+// ── CSV 导出 ─────────────────────────────────────────────
+function csvExport(rows,fields,name){
+  const BOM='\uFEFF';
+  const body=rows.map(r=>fields.map(f=>`"${esc(r[f.k])}"`).join(',')).join('\n');
+  const blob=new Blob([BOM+fields.map(f=>f.l).join(',')+'\n'+body],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();
+  URL.revokeObjectURL(url);
+  toast(`CSV 已导出 ${rows.length} 条 ✓`);
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Excel 导出：纯 JS 实现，零CDN依赖
+// ── 原理：手写 Open XML（.xlsx = ZIP包含若干XML文件）
+// ══════════════════════════════════════════════════════════
+
+/* ── 最小化 ZIP 打包器 ─────────────────────────────────── */
+// 实现 DEFLATE-store（无压缩）模式的 ZIP，足够生成 xlsx
+const MiniZip = (() => {
+  function u8(str){
+    const e=new TextEncoder();return e.encode(str);
+  }
+  function crc32(data){
+    let c=0xFFFFFFFF;
+    const t=new Uint32Array(256);
+    for(let i=0;i<256;i++){
+      let x=i;
+      for(let j=0;j<8;j++) x=x&1?(x>>>1)^0xEDB88320:(x>>>1);
+      t[i]=x;
+    }
+    for(const b of data) c=t[(c^b)&0xFF]^(c>>>8);
+    return (c^0xFFFFFFFF)>>>0;
+  }
+  function le16(n){const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b;}
+  function le32(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n,true);return b;}
+  function concat(...arrays){
+    const total=arrays.reduce((s,a)=>s+a.length,0);
+    const out=new Uint8Array(total);
+    let off=0;
+    for(const a of arrays){out.set(a,off);off+=a.length;}
+    return out;
+  }
+
+  return {
+    build(files){ // files = [{name:string, data:Uint8Array}]
+      const entries=[];
+      let offset=0;
+
+      for(const {name,data} of files){
+        const nameB=u8(name);
+        const crc=crc32(data);
+        // Local file header
+        const lfh=concat(
+          new Uint8Array([0x50,0x4B,0x03,0x04]), // sig
+          le16(20),        // version needed
+          le16(0),         // flags
+          le16(0),         // compression: store
+          le16(0),le16(0), // mod time/date
+          le32(crc),
+          le32(data.length),
+          le32(data.length),
+          le16(nameB.length),
+          le16(0),         // extra len
+          nameB
+        );
+        entries.push({nameB,crc,size:data.length,offset,lfh,data});
+        offset+=lfh.length+data.length;
+      }
+
+      // Central directory
+      const cds=[];
+      for(const e of entries){
+        cds.push(concat(
+          new Uint8Array([0x50,0x4B,0x01,0x02]),
+          le16(20),le16(20),
+          le16(0),le16(0),
+          le16(0),le16(0),
+          le32(e.crc),
+          le32(e.size),le32(e.size),
+          le16(e.nameB.length),
+          le16(0),le16(0),le16(0),
+          le16(0),le32(0),
+          le32(e.offset),
+          e.nameB
+        ));
+      }
+      const cd=concat(...cds);
+      const eocd=concat(
+        new Uint8Array([0x50,0x4B,0x05,0x06]),
+        le16(0),le16(0),
+        le16(entries.length),le16(entries.length),
+        le32(cd.length),le32(offset),
+        le16(0)
+      );
+      const parts=[...entries.map(e=>concat(e.lfh,e.data)),cd,eocd];
+      return concat(...parts);
+    }
+  };
+})();
+
+/* ── XML 字符串转义 ─────────────────────────────────────── */
+function xmlEsc(s){
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+}
+
+/* ── 纯JS生成带样式的 .xlsx 文件 ─────────────────────────
+   sheetsConfig = [{name:string, rows:[Object], fields:[{k,l}]}]
+   summarySheet = {name:string, data:[[cell,...]]}  可选
+──────────────────────────────────────────────────────────*/
+function buildXlsx(sheetsConfig, summarySheet){
+  const enc=s=>new TextEncoder().encode(s);
+
+  // ── 共享字符串表 ──────────────────────────────────────
+  const sharedStrings=[];
+  const ssMap={};
+  function si(v){
+    const k=String(v??'');
+    if(ssMap[k]===undefined){ssMap[k]=sharedStrings.length;sharedStrings.push(k);}
+    return ssMap[k];
+  }
+
+  // ── 收集所有需要的字符串（先遍历，建立共享表）─────────
+  const allSheets=summarySheet?[summarySheet,...sheetsConfig.map(s=>({
+    name:s.name,
+    data:[s.fields.map(f=>f.l),...s.rows.map(r=>s.fields.map(f=>String(r[f.k]??'')))]
+  }))]:sheetsConfig.map(s=>({
+    name:s.name,
+    data:[s.fields.map(f=>f.l),...s.rows.map(r=>s.fields.map(f=>String(r[f.k]??'')))]
+  }));
+  for(const sh of allSheets) for(const row of sh.data) for(const cell of row) si(cell);
+
+  // ── styles.xml（最简样式：表头绿色+白色粗体，交替行底色）
+  const stylesXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts>
+    <font><sz val="10"/><name val="微软雅黑"/></font>
+    <font><sz val="11"/><b/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font>
+    <font><sz val="14"/><b/><color rgb="FF14532D"/><name val="微软雅黑"/></font>
+  </fonts>
+  <fills>
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF0FDF4"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF16A34A"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFDCFCE7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/></patternFill></fill>
+  </fills>
+  <borders><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"><alignment horizontal="center"/></xf>
+  </cellXfs>
+</styleSheet>`;
+  // style index: 0=normal, 1=header(green bg+white bold), 2=even row(light green), 3=odd row(white), 4=title(big bold dark green), 5=center
+
+  // ── 生成单个 sheet XML ────────────────────────────────
+  function sheetXml(data, colWidths, isDataSheet){
+    const colsXml=colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('');
+    const rowsXml=data.map((row,ri)=>{
+      const isHeader=ri===0&&isDataSheet;
+      const isSummaryTitle=!isDataSheet&&ri===0;
+      const isSubHeader=!isDataSheet&&ri===4;
+      const cells=row.map((val,ci)=>{
+        const col=String.fromCharCode(65+ci);
+        const r=ri+1;
+        let s=0;
+        if(isHeader) s=1;
+        else if(isSummaryTitle) s=4;
+        else if(isSubHeader) s=5;
+        else if(isDataSheet) s=ri%2===0?2:3;
+        return `<c r="${col}${r}" t="s" s="${s}"><v>${si(val)}</v></c>`;
+      }).join('');
+      const ht=isHeader?' ht="22" customHeight="1"':isSummaryTitle?' ht="26" customHeight="1"':'';
+      return `<row r="${ri+1}"${ht}>${cells}</row>`;
+    }).join('');
+    const freeze=isDataSheet?`<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`:'';
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  ${freeze}
+  <sheetFormatPr defaultRowHeight="18"/>
+  ${colWidths.length?`<cols>${colsXml}</cols>`:''}
+  <sheetData>${rowsXml}</sheetData>
+</worksheet>`;
+  }
+
+  // ── 计算列宽 ─────────────────────────────────────────
+  function calcWidths(data){
+    if(!data||!data[0])return[];
+    return data[0].map((_,ci)=>
+      Math.min(Math.max(...data.map(row=>{
+        const v=String(row[ci]||'');
+        return [...v].reduce((s,c)=>s+(c.charCodeAt(0)>127?2.2:1.1),0);
+      }),6),42)
+    );
+  }
+
+  // ── 共享字符串 XML ────────────────────────────────────
+  const ssXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sharedStrings.length}" uniqueCount="${sharedStrings.length}">
+${sharedStrings.map(s=>`<si><t xml:space="preserve">${xmlEsc(s)}</t></si>`).join('\n')}
+</sst>`;
+
+  // ── workbook.xml ──────────────────────────────────────
+  const wbXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    ${allSheets.map((s,i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+2}"/>`).join('\n    ')}
+  </sheets>
+</workbook>`;
+
+  // ── workbook.xml.rels ─────────────────────────────────
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId${allSheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+  ${allSheets.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('\n  ')}
+</Relationships>`;
+
+  // ── [Content_Types].xml ───────────────────────────────
+  const ctXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+  ${allSheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n  ')}
+</Types>`;
+
+  // ── _rels/.rels ───────────────────────────────────────
+  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  // ── 打包所有文件 ──────────────────────────────────────
+  const files=[
+    {name:'[Content_Types].xml',  data:enc(ctXml)},
+    {name:'_rels/.rels',          data:enc(rootRels)},
+    {name:'xl/workbook.xml',      data:enc(wbXml)},
+    {name:'xl/_rels/workbook.xml.rels', data:enc(wbRels)},
+    {name:'xl/styles.xml',        data:enc(stylesXml)},
+    {name:'xl/sharedStrings.xml', data:enc(ssXml)},
+  ];
+  allSheets.forEach((s,i)=>{
+    const widths=calcWidths(s.data);
+    const isData=!summarySheet||(summarySheet&&i>0);
+    files.push({name:`xl/worksheets/sheet${i+1}.xml`, data:enc(sheetXml(s.data,widths,isData))});
+  });
+
+  return MiniZip.build(files);
+}
+
+/* ── 触发浏览器下载 xlsx ─────────────────────────────────*/
+function downloadXlsx(uint8Array, filename){
+  const blob=new Blob([uint8Array],{
+    type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+// ── 客户数据导出 ──────────────────────────────────────────
+function doExportC(fmt='xlsx'){
+  const vc=visibleCustomers();
+  const ds=today().replace(/-/g,'');
+  const filtC=vc.filter(c=>{
+    if(expState.fSt&&c.status!==expState.fSt)return false;
+    if(expState.fLv&&c.customerLevel!==expState.fLv)return false;
+    if(expState.fMgr&&c.assignedTo!==expState.fMgr)return false;
+    return true;
+  });
+  if(!filtC.length){toast('暂无数据可导出','err');return;}
+  if(fmt==='csv'){csvExport(filtC,C_FIELDS,`花花食界_客户_${ds}.csv`);return;}
+  try{
+    const buf=buildXlsx([{name:'客户列表',rows:filtC,fields:C_FIELDS}]);
+    downloadXlsx(buf,`花花食界_客户_${ds}.xlsx`);
+    toast(`Excel 已导出 ${filtC.length} 条客户数据 ✓`);
+  }catch(e){toast('Excel导出失败：'+e.message,'err');console.error(e);}
+}
+
+// ── 跟进记录导出 ──────────────────────────────────────────
+function doExportF(fmt='xlsx'){
+  const vf=visibleFollowups();
+  const ds=today().replace(/-/g,'');
+  const filtF=vf.filter(f=>{
+    if(expState.fFrom&&f.createdAt<expState.fFrom)return false;
+    if(expState.fTo&&f.createdAt>expState.fTo)return false;
+    return true;
+  }).map(f=>{
+    const c=DB.customers.find(c=>c.id===f.customerId);
+    return{...f,companyName:c?c.companyName:'未知',createdByName:f.createdByName||getUserName(f.createdBy)};
+  });
+  if(!filtF.length){toast('暂无数据可导出','err');return;}
+  if(fmt==='csv'){csvExport(filtF,F_FIELDS,`花花食界_跟进记录_${ds}.csv`);return;}
+  try{
+    const buf=buildXlsx([{name:'跟进记录',rows:filtF,fields:F_FIELDS}]);
+    downloadXlsx(buf,`花花食界_跟进记录_${ds}.xlsx`);
+    toast(`Excel 已导出 ${filtF.length} 条跟进记录 ✓`);
+  }catch(e){toast('Excel导出失败：'+e.message,'err');console.error(e);}
+}
+
+// ── 完整报表导出（管理员专属，含3个Sheet）────────────────
+function doExportFull(){
+  if(!isAdmin()){toast('仅管理员可使用此功能','err');return;}
+  const ds=today().replace(/-/g,'');
+  try{
+    const allC=DB.customers;
+    const allF=DB.followups.map(f=>{
+      const c=DB.customers.find(c=>c.id===f.customerId);
+      return{...f,companyName:c?c.companyName:'未知',createdByName:f.createdByName||getUserName(f.createdBy)};
+    });
+    const wr=weekRange();
+    const wkFU=DB.followups.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to);
+    // 概览 sheet 数据
+    const summaryData=[
+      ['花花食界 CRM 数据汇总报表',''],
+      ['导出时间', new Date().toLocaleString('zh-CN')],
+      ['导出人', currentUser?.name||'—'],
+      ['',''],
+      ['指标','数值'],
+      ['客户总数', DB.customers.length],
+      ['A级客户', DB.customers.filter(c=>c.customerLevel==='A').length],
+      ['B级客户', DB.customers.filter(c=>c.customerLevel==='B').length],
+      ['C级客户', DB.customers.filter(c=>c.customerLevel==='C').length],
+      ['合作/成交客户', DB.customers.filter(c=>c.status==='合作中'||c.status==='成交').length],
+      ['流失客户', DB.customers.filter(c=>c.status==='流失').length],
+      ['',''],
+      ['跟进总次数', DB.followups.length],
+      ['本周跟进次数', wkFU.length],
+      ['本周覆盖客户', new Set(wkFU.map(f=>f.customerId)).size],
+      ['签约成功记录', DB.followups.filter(f=>f.outcome==='签约成功').length],
+    ];
+    const buf=buildXlsx(
+      [{name:'客户列表',rows:allC,fields:C_FIELDS},{name:'跟进记录',rows:allF,fields:F_FIELDS}],
+      {name:'数据概览', data:summaryData}
+    );
+    downloadXlsx(buf,`花花食界_完整数据_${ds}.xlsx`);
+    toast(`完整报表已导出（${allC.length}客户 + ${allF.length}跟进 + 概览）✓`,'ai');
+  }catch(e){toast('完整报表导出失败：'+e.message,'err');console.error(e);}
+}
+
+
+
+// ══════════════════════════════════════════════════════════
+// ── 数据导入：CSV / Excel → 叠加到系统数据
+// ══════════════════════════════════════════════════════════
+
+// 导入状态
+let importState={step:'idle', type:'', preview:[], errors:[], mapped:[]};
+
+// 字段映射表：支持中英文列名识别
+const IMPORT_C_MAP={
+  companyName:  ['公司名称','公司','company','companyname','企业名称','客户名称'],
+  contactName:  ['联系人','联系人姓名','contact','contactname','姓名'],
+  contactTitle: ['职位','联系人职位','title','contacttitle','职务'],
+  phone:        ['手机','手机号码','电话','mobile','phone','tel'],
+  email:        ['邮箱','邮件','email','mail'],
+  city:         ['城市','所在城市','city','地区'],
+  industry:     ['行业','industry'],
+  customerLevel:['客户级别','级别','level','customerlevel','等级'],
+  status:       ['状态','客户状态','status'],
+  source:       ['来源','客户来源','source'],
+  assignedTo:   ['负责经理','负责人','经理','assignedto','assigned'],
+  notes:        ['备注','notes','remark','note'],
+};
+
+// 枚举值归一化
+function normalizeLevel(v){
+  if(!v)return 'B';
+  const s=String(v).trim().toUpperCase();
+  if(s==='A'||s.includes('重点')||s.includes('优先'))return 'A';
+  if(s==='C'||s.includes('普通')||s.includes('一般'))return 'C';
+  return 'B';
+}
+function normalizeStatus(v){
+  if(!v)return '跟进中';
+  const s=String(v).trim();
+  const map={'活跃':'活跃','跟进':'跟进中','跟进中':'跟进中','暂停':'暂停','合作':'合作中','合作中':'合作中','成交':'成交','流失':'流失'};
+  for(const[k,val] of Object.entries(map)){if(s.includes(k))return val;}
+  return '跟进中';
+}
+
+// 将原始数据行映射为客户对象
+function mapRowToCustomer(row, headerMap){
+  const get=(field)=>{
+    const colIdx=headerMap[field];
+    return colIdx!==undefined?String(row[colIdx]||'').trim():'';
+  };
+  return {
+    id:gid(),
+    companyName:  get('companyName'),
+    contactName:  get('contactName'),
+    contactTitle: get('contactTitle'),
+    phone:        get('phone'),
+    email:        get('email'),
+    city:         get('city'),
+    industry:     get('industry')||'其他',
+    customerLevel:normalizeLevel(get('customerLevel')),
+    status:       normalizeStatus(get('status')),
+    source:       get('source')||'其他',
+    assignedTo:   get('assignedTo')||currentUser?.name||'',
+    notes:        get('notes'),
+    createdBy:    currentUser?.id||'',
+    createdAt:    today(),
+    updatedAt:    today(),
+  };
+}
+
+// 智能列头匹配：返回 {fieldKey: colIndex}
+function detectHeaderMap(headers){
+  const map={};
+  headers.forEach((h,i)=>{
+    const norm=String(h).trim().toLowerCase().replace(/\s/g,'');
+    for(const[field,aliases] of Object.entries(IMPORT_C_MAP)){
+      if(aliases.some(a=>norm===a.toLowerCase().replace(/\s/g,''))){
+        if(map[field]===undefined) map[field]=i;
+      }
+    }
+  });
+  return map;
+}
+
+// 打开导入向导弹窗
+function openImportModal(){
+  importState={step:'upload',type:'customers',preview:[],errors:[],mapped:[]};
+  renderImportModal();
+}
+
+function renderImportModal(){
+  const existing=document.getElementById('modal-ov');
+  if(existing)existing.remove();
+
+  const o=document.createElement('div');
+  o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+
+  let bodyHTML='';
+
+  if(importState.step==='upload'){
+    bodyHTML=`
+    <div style="text-align:center;padding:10px 0 6px">
+      <div style="font-size:40px;margin-bottom:10px">📂</div>
+      <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:6px">导入客户数据</div>
+      <div style="font-size:13px;color:var(--ms);margin-bottom:20px">支持 CSV 和 Excel (.xlsx/.xls) 格式，数据将<strong style="color:var(--g)">追加</strong>到现有客户列表</div>
+    </div>
+
+    <!-- 拖拽区域 -->
+    <div id="imp-drop" style="border:2px dashed var(--sv);border-radius:12px;padding:28px 20px;text-align:center;background:var(--sn);cursor:pointer;transition:all .15s"
+      onclick="document.getElementById('imp-file').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--g)';this.style.background='#f0fdf4'"
+      ondragleave="this.style.borderColor='var(--sv)';this.style.background='var(--sn)'"
+      ondrop="event.preventDefault();this.style.borderColor='var(--sv)';this.style.background='var(--sn)';handleImportDrop(event)">
+      <div style="font-size:28px;margin-bottom:8px">📄</div>
+      <div style="font-size:13px;font-weight:600;color:var(--sl)">点击选择文件 或 拖拽到此处</div>
+      <div style="font-size:11px;color:var(--ms);margin-top:5px">支持 .csv · .xlsx · .xls</div>
+    </div>
+    <input type="file" id="imp-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleImportFile(this)">
+
+    <!-- 模板下载 -->
+    <div style="margin-top:14px;padding:11px 13px;background:#f0fdf4;border-radius:9px;border:1px solid #d1fae5;font-size:12px;color:#166534;line-height:1.8">
+      💡 <strong>列名要求：</strong>系统会自动识别中英文列名。<br>
+      必填列：<strong>公司名称、联系人、手机</strong>（其余可选）<br>
+      <button class="btn btn-sm" style="margin-top:7px;color:var(--g);border-color:var(--g)" onclick="downloadImportTemplate()">⬇️ 下载导入模板</button>
+    </div>`;
+  }
+
+  else if(importState.step==='preview'){
+    const {preview,errors,mapped}=importState;
+    const validCount=mapped.filter(r=>r.companyName).length;
+    const skipCount=mapped.length-validCount;
+    bodyHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--ink)">📋 导入预览</div>
+        <div style="font-size:12px;color:var(--ms);margin-top:2px">识别到 ${mapped.length} 条数据，有效 ${validCount} 条${skipCount?`，跳过 ${skipCount} 条（无公司名）`:''}${errors.length?`，${errors.length} 个列未识别`:'匹配完整'}</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:5px">
+        <button class="btn btn-sm" onclick="importState.step='upload';renderImportModal()">↩ 重新上传</button>
+        <button class="btn btn-p btn-sm" onclick="confirmImport()" ${validCount?'':'disabled'}>✓ 确认导入 ${validCount} 条</button>
+      </div>
+    </div>
+    ${errors.length?`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:9px 12px;font-size:12px;color:#9a3412;margin-bottom:11px">
+      ⚠️ 以下列未能识别，将使用默认值：${errors.join('、')}
+    </div>`:''}
+    <div style="overflow-x:auto;max-height:320px;overflow-y:auto;border:1px solid var(--sv);border-radius:8px">
+      <table class="ptbl" style="min-width:600px">
+        <thead style="position:sticky;top:0;z-index:1">
+          <tr><th>状态</th><th>公司名称</th><th>联系人</th><th>手机</th><th>城市</th><th>级别</th><th>状态</th><th>负责人</th></tr>
+        </thead>
+        <tbody>
+          ${mapped.slice(0,50).map(r=>{
+            const dup=DB.customers.some(c=>c.companyName===r.companyName&&c.phone===r.phone);
+            const valid=!!r.companyName;
+            return `<tr style="opacity:${valid?1:0.45}">
+              <td style="text-align:center">${!valid?'⚠️跳过':dup?'⚠️重复':'✓新增'}</td>
+              <td style="font-weight:${valid?600:400}">${h(r.companyName||'（空）')}</td>
+              <td>${h(r.contactName)}</td>
+              <td>${h(r.phone)}</td>
+              <td>${h(r.city)}</td>
+              <td>${h(r.customerLevel)}</td>
+              <td>${h(r.status)}</td>
+              <td>${h(r.assignedTo)}</td>
+            </tr>`;
+          }).join('')}
+          ${mapped.length>50?`<tr><td colspan="8" style="text-align:center;color:var(--ms);font-size:11px;padding:8px">…仅预览前50条，共 ${mapped.length} 条</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--ms)">
+      ⚠️ 系统将追加导入，<strong>不会覆盖</strong>现有数据。手机号和公司名完全相同的记录标注为"重复"，仍会导入。
+    </div>`;
+  }
+
+  const title=importState.step==='upload'?'📂 导入数据':'📋 确认导入';
+  const showFooter=importState.step==='upload';
+
+  o.innerHTML=`<div class="modal" style="max-width:680px">
+    <div class="modal-hdr">
+      <span class="modal-ttl">${title}</span>
+      <button class="modal-cls" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">${bodyHTML}</div>
+    ${showFooter?`<div class="modal-ft"><button class="btn" onclick="closeModal()">取消</button></div>`:''}
+  </div>`;
+  document.body.appendChild(o);
+}
+
+// 处理文件选择（input）
+function handleImportFile(input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  processImportFile(file);
+  input.value='';
+}
+// 处理拖拽
+function handleImportDrop(e){
+  const file=e.dataTransfer?.files?.[0];
+  if(!file)return;
+  processImportFile(file);
+}
+
+// 核心解析函数
+function processImportFile(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  const reader=new FileReader();
+
+  if(ext==='csv'){
+    reader.onload=e=>{
+      // 尝试 UTF-8，如果乱码再用 GBK
+      const text=e.target.result;
+      parseCSVAndPreview(text);
+    };
+    reader.onerror=()=>toast('文件读取失败','err');
+    reader.readAsText(file,'utf-8');
+  }else if(ext==='xlsx'||ext==='xls'){
+    // 纯JS解析xlsx：xlsx本质是ZIP，其中有XML，用正则提取共享字符串和单元格数据
+    reader.onload=e=>{
+      try{
+        parseXlsxBinary(e.target.result, file.name);
+      }catch(err){
+        toast('Excel解析失败，建议另存为CSV后再导入：'+err.message,'err');
+      }
+    };
+    reader.onerror=()=>toast('文件读取失败','err');
+    reader.readAsArrayBuffer(file);
+  }else{
+    toast('不支持的文件格式，请使用 CSV 或 Excel (.xlsx)','err');
+  }
+}
+
+// 纯JS解析 .xlsx 二进制（不依赖任何库）
+function parseXlsxBinary(arrayBuffer, filename){
+  // xlsx是ZIP文件，用纯JS解ZIP
+  const data=new Uint8Array(arrayBuffer);
+
+  // 简单ZIP解析：找所有 Local File Header (PK\x03\x04)
+  function readUint16LE(buf,off){return buf[off]|(buf[off+1]<<8);}
+  function readUint32LE(buf,off){return (buf[off]|(buf[off+1]<<8)|(buf[off+2]<<16)|(buf[off+3]<<24))>>>0;}
+  const dec=new TextDecoder('utf-8');
+
+  const files={};
+  let i=0;
+  while(i<data.length-4){
+    // Local file header signature
+    if(data[i]===0x50&&data[i+1]===0x4B&&data[i+2]===0x03&&data[i+3]===0x04){
+      const compression=readUint16LE(data,i+8);
+      const compressedSize=readUint32LE(data,i+18);
+      const nameLen=readUint16LE(data,i+26);
+      const extraLen=readUint16LE(data,i+28);
+      const name=dec.decode(data.slice(i+30,i+30+nameLen));
+      const fileData=data.slice(i+30+nameLen+extraLen, i+30+nameLen+extraLen+compressedSize);
+      // 只处理无压缩(0)或deflate(8)的文件
+      if(compression===0){
+        files[name]=dec.decode(fileData);
+      }else if(compression===8){
+        // deflate — 用 DecompressionStream 如果可用
+        try{
+          // 同步方式不可行，标记为需要异步处理
+          files[name]={compressed:fileData};
+        }catch(e){}
+      }
+      i+=30+nameLen+extraLen+compressedSize;
+    }else{i++;}
+  }
+
+  // 尝试用 DecompressionStream 解压（现代浏览器支持）
+  const compressed=Object.entries(files).filter(([,v])=>v&&v.compressed);
+  if(compressed.length===0){
+    extractXlsxContent(files);
+    return;
+  }
+  // 异步解压
+  Promise.all(compressed.map(async([name,{compressed:cdata}])=>{
+    try{
+      const ds=new DecompressionStream('deflate-raw');
+      const writer=ds.writable.getWriter();
+      const reader2=ds.readable.getReader();
+      writer.write(cdata);writer.close();
+      const chunks=[];
+      while(true){const{done,value}=await reader2.read();if(done)break;chunks.push(value);}
+      const total=chunks.reduce((s,c)=>s+c.length,0);
+      const out=new Uint8Array(total);let off=0;
+      chunks.forEach(c=>{out.set(c,off);off+=c.length;});
+      files[name]=new TextDecoder('utf-8').decode(out);
+    }catch(e){files[name]='';}
+  })).then(()=>extractXlsxContent(files));
+}
+
+// 从解压的xlsx XML中提取数据
+function extractXlsxContent(files){
+  // 找共享字符串
+  const ssFile=files['xl/sharedStrings.xml']||files['xl/SharedStrings.xml']||'';
+  const sharedStrs=[];
+  if(ssFile){
+    const matches=ssFile.matchAll(/<t[^>]*>([^<]*)<\/t>/g);
+    for(const m of matches) sharedStrs.push(m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'"));
+  }
+
+  // 找第一个 sheet
+  const sheetFile=files['xl/worksheets/sheet1.xml']||
+    Object.keys(files).find(k=>k.match(/xl\/worksheets\/sheet\d+\.xml/)&&files[k]);
+  if(!sheetFile){toast('无法读取Excel工作表内容，建议另存为CSV后再导入','err');return;}
+  const sheetXmlStr=typeof sheetFile==='string'?sheetFile:files[sheetFile]||'';
+  if(!sheetXmlStr){toast('工作表内容为空','err');return;}
+
+  // 解析行列
+  const rows=[];
+  const rowMatches=sheetXmlStr.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g);
+  for(const rowM of rowMatches){
+    const cells=[];
+    const cellMatches=rowM[1].matchAll(/<c r="([A-Z]+)(\d+)"([^>]*)>([\s\S]*?)<\/c>/g);
+    let maxCol=0;
+    const cellMap={};
+    for(const cm of cellMatches){
+      const colLetter=cm[1];
+      const attrs=cm[3];
+      const inner=cm[4];
+      const colIdx=colLetter.split('').reduce((n,c)=>n*26+c.charCodeAt(0)-64,0)-1;
+      maxCol=Math.max(maxCol,colIdx);
+      // 获取值
+      const tMatch=inner.match(/<v>([^<]*)<\/v>/);
+      const vRaw=tMatch?tMatch[1]:'';
+      let val='';
+      if(attrs.includes('t="s"')){
+        // 共享字符串
+        val=sharedStrs[parseInt(vRaw)]??vRaw;
+      }else if(attrs.includes('t="inlineStr"')){
+        const tInline=inner.match(/<t[^>]*>([^<]*)<\/t>/);
+        val=tInline?tInline[1]:vRaw;
+      }else{
+        val=vRaw;
+      }
+      cellMap[colIdx]=val.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    }
+    // 补全空格
+    const row=[];
+    for(let ci=0;ci<=maxCol;ci++) row.push(cellMap[ci]??'');
+    if(row.some(c=>c)) rows.push(row);
+  }
+
+  if(rows.length<2){toast('Excel文件内容为空或无法识别，建议另存为CSV后再导入','err');return;}
+  processRawRows(rows);
+}
+
+// CSV 解析（支持带引号的字段、中文）
+function parseCSVAndPreview(text){
+  // 移除 BOM
+  const clean=text.replace(/^\uFEFF/,'');
+  const lines=clean.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2){toast('CSV文件内容为空','err');return;}
+  const rows=lines.map(line=>{
+    const cells=[];let cur='',inQ=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+      else if(c===','&&!inQ){cells.push(cur);cur='';}
+      else cur+=c;
+    }
+    cells.push(cur);
+    return cells;
+  });
+  processRawRows(rows);
+}
+
+// 通用行处理：识别表头，映射数据
+function processRawRows(rows){
+  const headers=rows[0].map(h=>String(h).trim());
+  const headerMap=detectHeaderMap(headers);
+
+  // 找出未识别的列
+  const recognizedCols=new Set(Object.values(headerMap));
+  const unrecognized=headers.filter((_,i)=>!recognizedCols.has(i)&&headers[i]);
+
+  const mapped=rows.slice(1)
+    .filter(r=>r.some(c=>String(c).trim()))
+    .map(r=>mapRowToCustomer(r,headerMap));
+
+  importState.preview=rows;
+  importState.mapped=mapped;
+  importState.errors=unrecognized.slice(0,5);
+  importState.step='preview';
+  renderImportModal();
+}
+
+// 确认导入
+function confirmImport(){
+  const valid=importState.mapped.filter(r=>r.companyName);
+  if(!valid.length){toast('无有效数据可导入','err');return;}
+  DB.customers=[...DB.customers,...valid];
+  saveDB();
+  closeModal();
+  updateSidebar();
+  if(curPage==='customers')refreshCustomers();
+  toast(`成功导入 ${valid.length} 条客户数据 ✓`);
+  importState={step:'idle',type:'',preview:[],errors:[],mapped:[]};
+}
+
+// 下载导入模板
+function downloadImportTemplate(){
+  const headers=['公司名称','联系人','联系人职位','手机号码','邮箱地址','所在城市','行业','客户级别','客户状态','客户来源','负责经理','备注'];
+  const example=['示例公司','张三','采购经理','13800138000','example@company.com','上海','餐饮','A','跟进中','展会','李晓梅','重点客户'];
+  const BOM='\uFEFF';
+  const csv=BOM+[headers,example].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='花花食界_客户导入模板.csv';a.click();
+  URL.revokeObjectURL(url);
+  toast('模板已下载 ✓');
+}
+
+
+
+// ══════════════════════════════════════════════════════════
+// ── 客户表单
+// ══════════════════════════════════════════════════════════
+let editingCustId=null;
+function openCustForm(id){
+  editingCustId=id;
+  const c=id?DB.customers.find(x=>x.id===id):null;
+  // 权限检查
+  if(c&&!isAdmin()&&c.createdBy!==currentUser?.id){toast('无权编辑他人客户','err');return;}
+  const v=(k,def='')=>h(c?c[k]||def:def);
+  const sel=(k,def,opts)=>opts.map(o=>`<option value="${o}" ${(c?c[k]:def)===o?'selected':''}>${o}</option>`).join('');
+  openModal(`${id?'✏️ 编辑客户':'➕ 新增客户'}`,`
+  <div class="form-grid">
+    <div class="f-sect">基本信息</div>
+    <div class="fg"><label>公司名称<span class="req">*</span></label><input id="cf-co" value="${v('companyName')}"><span class="err-m" id="e-co"></span></div>
+    <div class="fg"><label>联系人姓名<span class="req">*</span></label><input id="cf-cn" value="${v('contactName')}"><span class="err-m" id="e-cn"></span></div>
+    <div class="fg"><label>联系人职位</label><input id="cf-ct" value="${v('contactTitle')}" placeholder="如：采购经理"></div>
+    <div class="fg"><label>手机号码<span class="req">*</span></label><input id="cf-ph" type="tel" value="${v('phone')}"><span class="err-m" id="e-ph"></span></div>
+    <div class="fg"><label>邮箱地址</label><input id="cf-em" type="email" value="${v('email')}"></div>
+    <div class="fg"><label>所在城市</label><input id="cf-ci" value="${v('city')}" placeholder="如：上海"></div>
+    <div class="f-sect">分类信息</div>
+    <div class="fg"><label>行业</label><select id="cf-in">${sel('industry','餐饮',['餐饮','商超','电商','食品加工','其他'])}</select></div>
+    <div class="fg"><label>客户来源</label><select id="cf-so">${sel('source','展会',['展会','转介绍','网络','电话开发','自拓','其他'])}</select></div>
+    <div class="fg"><label>客户级别<span class="req">*</span></label><select id="cf-lv">${sel('customerLevel','B',['A','B','C'])}</select></div>
+    <div class="fg"><label>客户状态<span class="req">*</span></label><select id="cf-st">${sel('status','跟进中',['活跃','跟进中','暂停','合作中','成交','流失'])}</select></div>
+    <div class="f-sect">负责信息</div>
+    <div class="fg"><label>负责客户经理<span class="req">*</span></label><input id="cf-at" value="${v('assignedTo',currentUser?.name||'')}" placeholder="填写员工姓名"><span class="err-m" id="e-at"></span></div>
+    <div class="fg full"><label>备注</label><textarea id="cf-no">${v('notes')}</textarea></div>
+  </div>`,
+  `<button class="btn" onclick="closeModal()">取消</button><button class="btn btn-p" onclick="saveCust()">保存</button>`);
+}
+function saveCust(){
+  const co=document.getElementById('cf-co')?.value.trim()||'';
+  const cn=document.getElementById('cf-cn')?.value.trim()||'';
+  const ph=document.getElementById('cf-ph')?.value.trim()||'';
+  const at=document.getElementById('cf-at')?.value.trim()||'';
+  let ok=true;
+  if(!co){document.getElementById('e-co').textContent='必填';ok=false;}
+  if(!cn){document.getElementById('e-cn').textContent='必填';ok=false;}
+  if(!ph){document.getElementById('e-ph').textContent='必填';ok=false;}
+  if(!at){document.getElementById('e-at').textContent='必填';ok=false;}
+  if(!ok)return;
+  const existing=editingCustId?DB.customers.find(c=>c.id===editingCustId):null;
+  const obj={
+    id:editingCustId||gid(),
+    companyName:co,contactName:cn,
+    contactTitle:document.getElementById('cf-ct')?.value.trim()||'',
+    phone:ph,email:document.getElementById('cf-em')?.value.trim()||'',
+    city:document.getElementById('cf-ci')?.value.trim()||'',
+    industry:document.getElementById('cf-in')?.value||'餐饮',
+    source:document.getElementById('cf-so')?.value||'展会',
+    customerLevel:document.getElementById('cf-lv')?.value||'B',
+    status:document.getElementById('cf-st')?.value||'跟进中',
+    assignedTo:at,
+    notes:document.getElementById('cf-no')?.value.trim()||'',
+    createdBy:existing?.createdBy||currentUser?.id||'',
+    createdAt:existing?.createdAt||today(),
+    updatedAt:today()
+  };
+  if(editingCustId){DB.customers=DB.customers.map(c=>c.id===editingCustId?obj:c);}
+  else{DB.customers.push(obj);}
+  saveDB();closeModal();updateSidebar();refreshCustomers();
+  toast(editingCustId?`"${obj.companyName}" 已更新`:`"${obj.companyName}" 创建成功`);
+}
+function confirmDelCust(id){
+  const c=DB.customers.find(x=>x.id===id);
+  if(!isAdmin()&&c?.createdBy!==currentUser?.id){toast('无权删除他人客户','err');return;}
+  openConfirm(`确定删除"${c?.companyName}"？同时删除其所有跟进记录，不可恢复。`,()=>{
+    DB.customers=DB.customers.filter(x=>x.id!==id);
+    DB.followups=DB.followups.filter(f=>f.customerId!==id);
+    saveDB();closeModal();updateSidebar();refreshCustomers();
+    toast('客户已删除','err');
+  });
+}
+
+// ── 客户详情 ──
+function openCustDetail(id){
+  const c=DB.customers.find(x=>x.id===id);if(!c)return;
+  // 权限：可查看（admin看全部，普通用户只能看自己的）
+  if(!isAdmin()&&c.createdBy!==currentUser?.id){toast('无权查看','err');return;}
+  const cFU=DB.followups.filter(f=>f.customerId===id&&(isAdmin()||f.createdBy===currentUser?.id))
+    .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  const fields=[['phone','手机'],['email','邮箱'],['city','城市'],['industry','行业'],['source','来源'],['assignedTo','负责经理'],['createdAt','创建日期'],['updatedAt','最后跟进']];
+  const canEdit=isAdmin()||c.createdBy===currentUser?.id;
+  const body=`<div class="det-hdr">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="det-co">${h(c.companyName)}</div><div class="det-meta">${h(c.contactName)}${c.contactTitle?` · ${h(c.contactTitle)}`:''}</div>
+      <div class="det-bdgs"><span class="det-bdg">${c.customerLevel}级</span><span class="det-bdg">${h(c.status)}</span><span class="det-bdg">${cFU.length} 条跟进</span></div></div>
+      <button class="modal-cls" style="background:rgba(255,255,255,.15);color:#fff;border:none" onclick="closeModal()">×</button>
+    </div></div>
+  <div style="padding:16px 20px;max-height:58vh;overflow-y:auto">
+    <div class="info-grid">${fields.map(([k,l])=>`<div class="info-it"><label>${l}</label><span style="color:${!c[k]?'var(--ms)':'var(--ink)'}">${c[k]?h(c[k]):'未填写'}</span></div>`).join('')}</div>
+    ${c.notes?`<div style="margin-bottom:14px;padding:10px 12px;background:#f0fdf4;border-radius:8px;border-left:3px solid var(--g)"><div style="font-size:10px;font-weight:700;color:var(--g);text-transform:uppercase;margin-bottom:4px">备注</div><div style="font-size:13px;color:var(--sl);line-height:1.65">${h(c.notes)}</div></div>`:''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
+      <span style="font-size:13px;font-weight:600">跟进记录 (${cFU.length})</span>
+      <button class="btn btn-p btn-sm" onclick="closeModal();openFUForm(null,'${id}')">+ 新增跟进</button>
+    </div>
+    ${cFU.length===0?`<div style="border:2px dashed var(--sv);border-radius:8px;padding:24px;text-align:center;color:var(--ms)"><div style="font-size:28px;margin-bottom:8px">📭</div>暂无跟进记录</div>`:`<div class="timeline">${cFU.map(f=>tlCard(f,false,false)).join('')}</div>`}
+  </div>
+  <div class="modal-ft">
+    <button class="btn" onclick="closeModal()">关闭</button>
+    ${canEdit?`<button class="btn btn-p" onclick="closeModal();openCustForm('${id}')">✏️ 编辑客户</button>`:''}
+  </div>`;
+  openRaw(body);
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 跟进记录表单
+// ══════════════════════════════════════════════════════════
+let editingFUId=null;
+
+// ── AI 总结跟进内容 ──────────────────────────────────────
+async function aiSummarizeFU(){
+  const content=document.getElementById('ff-co')?.value.trim()||'';
+  if(content.length<10){toast('请先输入足够的跟进内容（至少10个字）','err');return;}
+
+  // 检查 API Key
+  let apiKey='';
+  try{apiKey=localStorage.getItem('huahua_ai_key')||'';}catch(e){}
+  if(!apiKey.trim()){
+    openApiKeyModal(()=>{
+      // Key 保存后自动重新触发
+      setTimeout(aiSummarizeFU,300);
+    });
+    return;
+  }
+
+  // 加载状态
+  const btn=document.getElementById('ai-sum-btn');
+  const resultArea=document.getElementById('ai-sum-area');
+  if(btn){btn.disabled=true;btn.textContent='⏳ 总结中...';}
+  if(resultArea){resultArea.style.display='none';}
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','x-api-key':apiKey},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-5',
+        max_tokens:300,
+        system:'你是一位专业的销售助理，擅长提炼客户跟进要点。回复只输出总结内容，不要加任何前缀或解释。',
+        messages:[{role:'user',content:`请将以下销售跟进记录总结为一段简洁专业的中文摘要（100字以内），突出：客户态度、关键信息点、谈判进展。\n\n原文：${content}`}]
+      })
+    });
+    if(!res.ok){
+      const err=await res.json().catch(()=>({}));
+      throw new Error(err?.error?.message||`HTTP ${res.status}`);
+    }
+    const data=await res.json();
+    const summary=data.content?.[0]?.text?.trim()||'';
+    if(!summary)throw new Error('AI未返回内容');
+
+    // 显示结果卡片
+    const area=document.getElementById('ai-sum-area');
+    const textEl=document.getElementById('ai-sum-text');
+    if(area&&textEl){
+      textEl.textContent=summary;
+      area.style.display='block';
+    }
+    toast('🤖 AI总结完成！','ai');
+  }catch(err){
+    let msg=String(err.message||err);
+    if(msg.includes('401')||msg.includes('403'))msg='API Key 无效，请重新设置';
+    else if(msg.includes('429'))msg='请求过于频繁，请稍后再试';
+    toast('AI总结失败：'+msg,'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🤖 AI总结';}
+  }
+}
+
+// 替换原文
+function aiReplaceContent(){
+  const summary=document.getElementById('ai-sum-text')?.textContent||'';
+  if(!summary)return;
+  const ta=document.getElementById('ff-co');
+  if(ta){ta.value=summary;ta.focus();}
+  document.getElementById('ai-sum-area').style.display='none';
+  toast('已替换跟进内容');
+}
+
+// 追加到末尾
+function aiAppendContent(){
+  const summary=document.getElementById('ai-sum-text')?.textContent||'';
+  if(!summary)return;
+  const ta=document.getElementById('ff-co');
+  if(ta){
+    const cur=ta.value.trim();
+    ta.value=cur+(cur?'\n\n【AI总结】':'【AI总结】')+summary;
+    ta.focus();
+  }
+  document.getElementById('ai-sum-area').style.display='none';
+  toast('已追加到内容末尾');
+}
+
+function openFUForm(id,defaultCid){
+  editingFUId=id;
+  const f=id?DB.followups.find(x=>x.id===id):null;
+  if(f&&!isAdmin()&&f.createdBy!==currentUser?.id){toast('无权编辑他人记录','err');return;}
+  const v=(k,def='')=>h(f?f[k]||def:def);
+  const sel=(k,def,opts)=>opts.map(o=>`<option value="${o}" ${(f?f[k]:def)===o?'selected':''}>${o}</option>`).join('');
+  const vc=visibleCustomers();
+  const custSel=vc.map(c=>`<option value="${c.id}" ${(f?f.customerId:defaultCid||'')===c.id?'selected':''}>${h(c.companyName)}</option>`).join('');
+  openModal(`${id?'✏️ 编辑跟进记录':'📝 新增跟进记录'}`,`
+  <div class="form-grid">
+    <div class="f-sect">跟进信息</div>
+    <div class="fg"><label>关联客户<span class="req">*</span></label><select id="ff-cu"><option value="">-- 请选择 --</option>${custSel}</select><span class="err-m" id="e-cu"></span></div>
+    <div class="fg"><label>跟进方式</label><select id="ff-ty">${sel('type','电话',['电话','拜访','微信','邮件','视频会议'])}</select></div>
+
+    <!-- 跟进内容 + AI总结按钮 -->
+    <div class="fg full">
+      <label>跟进内容<span class="req">*</span></label>
+      <div class="ai-content-wrap">
+        <textarea id="ff-co" class="fu-content-area">${v('content')}</textarea>
+        <button type="button" id="ai-sum-btn" class="btn btn-ai btn-sm ai-btn-trigger" onclick="aiSummarizeFU()">🤖 AI总结</button>
+      </div>
+      <span class="err-m" id="e-co2"></span>
+    </div>
+
+    <!-- AI 总结结果卡片（默认隐藏） -->
+    <div class="ai-sum-wrap" id="ai-sum-area" style="display:none">
+      <div class="ai-sum-box">
+        <div class="ai-sum-label">🤖 <span>AI总结</span> 以下是智能摘要，请选择操作：</div>
+        <p class="ai-sum-text" id="ai-sum-text"></p>
+        <div class="ai-sum-actions">
+          <button class="btn btn-p btn-sm" onclick="aiReplaceContent()">✏️ 替换原文</button>
+          <button class="btn btn-sm" onclick="aiAppendContent()">➕ 追加到末尾</button>
+          <button class="btn btn-g btn-sm" onclick="document.getElementById('ai-sum-area').style.display='none'">✕ 关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fg"><label>跟进成果</label><select id="ff-oc">${sel('outcome','无进展',['无进展','有意向','确认需求','报价阶段','签约成功'])}</select></div>
+    <div class="fg"><label>跟进人</label><input id="ff-by" value="${v('createdByName',currentUser?.name||'')}" placeholder="填写姓名" readonly style="background:var(--sn);cursor:not-allowed"></div>
+    <div class="f-sect">下一步计划</div>
+    <div class="fg full"><label>下一步行动</label><textarea id="ff-na" style="min-height:58px">${v('nextAction')}</textarea></div>
+    <div class="fg"><label>下次跟进日期</label><input id="ff-nd" type="date" value="${v('nextFollowUpDate')}"></div>
+  </div>`,
+  `<button class="btn" onclick="closeModal()">取消</button><button class="btn btn-p" onclick="saveFU()">保存记录</button>`);
+}
+function saveFU(){
+  const cu=document.getElementById('ff-cu')?.value||'';
+  const co=document.getElementById('ff-co')?.value.trim()||'';
+  let ok=true;
+  if(!cu){document.getElementById('e-cu').textContent='必填';ok=false;}
+  if(!co){document.getElementById('e-co2').textContent='必填';ok=false;}
+  if(!ok)return;
+  const existing=editingFUId?DB.followups.find(f=>f.id===editingFUId):null;
+  const obj={
+    id:editingFUId||gid(),customerId:cu,
+    type:document.getElementById('ff-ty')?.value||'电话',
+    content:co,outcome:document.getElementById('ff-oc')?.value||'无进展',
+    createdBy:existing?.createdBy||currentUser?.id||'',
+    createdByName:existing?.createdByName||currentUser?.name||'',
+    createdAt:existing?.createdAt||today(),
+    nextAction:document.getElementById('ff-na')?.value.trim()||'',
+    nextFollowUpDate:document.getElementById('ff-nd')?.value||'',
+  };
+  if(editingFUId){DB.followups=DB.followups.map(f=>f.id===editingFUId?obj:f);}
+  else{DB.followups.push(obj);}
+  DB.customers=DB.customers.map(c=>{if(c.id===obj.customerId&&(!c.updatedAt||obj.createdAt>c.updatedAt))return{...c,updatedAt:obj.createdAt};return c;});
+  saveDB();closeModal();updateSidebar();
+  if(curPage==='followups')refreshFU();
+  else if(curPage==='dashboard')renderPage('dashboard');
+  toast(editingFUId?'跟进记录已更新':'跟进记录已保存 ✓');
+}
+function editFU(id){openFUForm(id,null);}
+function delFU(id){
+  const f=DB.followups.find(x=>x.id===id);
+  if(!isAdmin()&&f?.createdBy!==currentUser?.id){toast('无权删除他人记录','err');return;}
+  openConfirm('确定删除这条跟进记录吗？',()=>{
+    DB.followups=DB.followups.filter(f=>f.id!==id);
+    saveDB();closeModal();updateSidebar();
+    if(curPage==='followups')refreshFU();
+    toast('已删除','err');
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 模态框引擎
+// ══════════════════════════════════════════════════════════
+function openModal(title,body,footer){
+  const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.innerHTML=`<div class="modal"><div class="modal-hdr"><span class="modal-ttl">${title}</span><button class="modal-cls" onclick="closeModal()">×</button></div><div class="modal-body">${body}</div><div class="modal-ft">${footer}</div></div>`;
+  document.body.appendChild(o);
+}
+function openRaw(html){
+  const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+  const d=document.createElement('div');d.className='modal';d.style.maxWidth='680px';
+  d.innerHTML=html;o.appendChild(d);document.body.appendChild(o);
+}
+function openConfirm(msg,onOk){
+  const fnName='_confirmOk_'+gid();
+  window[fnName]=()=>{onOk();delete window[fnName];};
+  const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.innerHTML=`<div class="confirm-box"><div style="font-size:36px;margin-bottom:12px">⚠️</div><p style="font-size:14px;color:var(--sl);line-height:1.7">${msg}</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="closeModal()">取消</button><button class="btn btn-d" onclick="${fnName}();closeModal()">确认删除</button></div></div>`;
+  document.body.appendChild(o);
+}
+function closeModal(){const o=document.getElementById('modal-ov');if(o)o.remove();}
+
+// ══════════════════════════════════════════════════════════
+// ── API Key 设置模态框
+// ══════════════════════════════════════════════════════════
+function openApiKeyModal(onSavedCallback){
+  let currentKey='';
+  try{currentKey=localStorage.getItem('huahua_ai_key')||'';}catch(e){}
+
+  const o=document.createElement('div');
+  o.className='overlay';o.id='modal-ov';
+  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.innerHTML=`<div class="apikey-box">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="width:40px;height:40px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🔑</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--ink)">Claude API Key 设置</div>
+        <div style="font-size:12px;color:var(--ms);margin-top:2px">用于跟进内容AI总结和周报生成</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:14px">
+      <label>API Key</label>
+      <input type="password" id="ak-input" value="${h(currentKey)}" placeholder="sk-ant-api03-..." style="font-family:monospace;font-size:12px"
+        oninput="document.getElementById('ak-status').style.display='none'">
+      <div id="ak-status" style="display:none;margin-top:5px;font-size:12px;padding:6px 9px;border-radius:6px"></div>
+    </div>
+    <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:9px;padding:11px 13px;font-size:12px;color:#5b21b6;line-height:1.7;margin-bottom:16px">
+      💡 如何获取 API Key：<br>
+      1. 访问 <strong>console.anthropic.com</strong><br>
+      2. 登录后进入 <strong>API Keys</strong> 页面<br>
+      3. 点击 <strong>Create Key</strong> 复制即可<br>
+      <span style="color:var(--ms)">⚠ Key 仅保存在您本机浏览器中，不会上传</span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <button class="btn btn-d btn-sm" onclick="clearApiKey()" ${currentKey?'':'style="display:none"'} id="ak-clear-btn">🗑 清除</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn btn-ai" onclick="saveApiKey(${onSavedCallback?'window._akCallback':'null'})">💾 保存</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(o);
+  if(onSavedCallback) window._akCallback=onSavedCallback;
+  setTimeout(()=>document.getElementById('ak-input')?.focus(),50);
+}
+
+function saveApiKey(callback){
+  const key=document.getElementById('ak-input')?.value.trim()||'';
+  const statusEl=document.getElementById('ak-status');
+  if(key&&!key.startsWith('sk-ant-')){
+    if(statusEl){statusEl.style.display='block';statusEl.style.background='#fee2e2';statusEl.style.color='#991b1b';statusEl.textContent='⚠ Key 格式不正确，通常以 sk-ant- 开头';}
+    return;
+  }
+  try{
+    if(key){localStorage.setItem('huahua_ai_key',key);}
+    else{localStorage.removeItem('huahua_ai_key');}
+  }catch(e){}
+  closeModal();
+  if(key){
+    toast('API Key 已保存 ✓');
+    if(typeof callback==='function')callback();
+    if(window._akCallback){window._akCallback();delete window._akCallback;}
+  }else{
+    toast('API Key 已清除','info');
+  }
+}
+
+function clearApiKey(){
+  document.getElementById('ak-input').value='';
+  document.getElementById('ak-clear-btn').style.display='none';
+}
+
+// ══════════════════════════════════════════════════════════
+// ── 启动
+// ══════════════════════════════════════════════════════════
+loadDB();
+
+// 尝试恢复会话
+if(restoreSession()){
+  document.getElementById('login-page').classList.add('hidden');
+  initApp();
+} else {
+  // 显示登录页，预填手机号方便演示
+  document.getElementById('login-page').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
