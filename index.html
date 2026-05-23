@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界 CRM · v30.0 (3.0 Beta)</title>
+<title>花花食界 CRM · v30.0.1 (3.0 Beta)</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
-  花花食界 MiniCRM v30.0 (3.0 Beta) RELEASE
+  花花食界 MiniCRM v30.0.1 (3.0 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
   v29.2 Stable 修复说明(2026-05-15):
@@ -1265,7 +1265,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · CRM v30.0 (3.0 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · CRM v30.0.1 (3.0 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -7593,17 +7593,50 @@ async function saveSharedAIConfig(fields){
     updatedAt: new Date().toISOString(),
     updatedBy: currentUser?.id,
   });
+
+  // 先 update(常规路径)
   const {error, data} = await supa.from('ai_shared_config')
     .update(row).eq('id','singleton').select();
+
   if(error){
-    toast('保存共享配置失败:'+error.message,'err');
+    // v30.0.1:打印详细错误到控制台,帮助定位
+    console.error('[saveSharedAIConfig] update error:', error);
+    // 区分不同错误类型给明确提示
+    const msg = String(error.message||'');
+    const code = String(error.code||'');
+    if(code==='42P01' || msg.includes('not exist') || msg.includes('does not exist')){
+      toast('保存失败:ai_shared_config 表不存在。请先在 Supabase 执行 migration_v3.0_shared_ai_config.sql','err');
+    }else if(code==='42501' || msg.includes('policy') || msg.includes('permission')){
+      toast('保存失败:权限被拒绝。请确认当前账号在 Supabase profiles 表中 role 字段为 admin','err');
+    }else if(msg.includes('column')){
+      toast('保存失败:数据库表结构不匹配('+msg+')。请重新执行 SQL 迁移','err');
+    }else{
+      toast('保存失败:'+msg,'err');
+    }
     return false;
   }
+
   if(!data || data.length===0){
-    toast('保存失败:未更新任何行(可能是 RLS 权限不足,仅 admin 可改)','err');
-    return false;
+    // 没报错但没更新到行 — 通常是 singleton 行不存在,尝试 upsert
+    console.warn('[saveSharedAIConfig] update 返回 0 行,尝试 upsert');
+    const upsertRow = {...row, id:'singleton'};
+    const {error:upErr, data:upData} = await supa.from('ai_shared_config')
+      .upsert(upsertRow, {onConflict:'id'}).select();
+    if(upErr){
+      console.error('[saveSharedAIConfig] upsert error:', upErr);
+      toast('保存失败:'+(upErr.message||'未知错误')+'(请检查浏览器控制台 F12)','err');
+      return false;
+    }
+    if(!upData || upData.length===0){
+      // 仍然 0 行 — 大概率 RLS 拒绝
+      toast('保存失败:RLS 权限不足。请在 Supabase 后台用 SQL 检查:SELECT is_admin();(应返回 true)','err');
+      return false;
+    }
+    _sharedAICfg = snakeToCamel(upData[0]);
+  }else{
+    _sharedAICfg = snakeToCamel(data[0]);
   }
-  _sharedAICfg = snakeToCamel(data[0]);
+
   toast('✓ 共享 AI 配置已保存,全员立即生效');
   return true;
 }
@@ -8147,11 +8180,13 @@ function renderSharedAIConfigSection(){
         ③ 离职员工较多时定期更换 Key
       </div>
 
-      <div class="fg full" style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
-        <button class="btn" onclick="testSharedAIConnection()">🧪 测试连接</button>
-        <button class="btn btn-p" onclick="saveSharedAIFromForm()">💾 保存并启用</button>
+      <div class="fg full" style="display:block">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap">
+          <button class="btn" onclick="testSharedAIConnection()">🧪 测试连接</button>
+          <button class="btn btn-p" onclick="saveSharedAIFromForm()">💾 保存并启用</button>
+        </div>
+        <div id="shared-test-result" class="ai-test-result" style="display:none;margin-top:8px"></div>
       </div>
-      <div id="shared-test-result" class="ai-test-result" style="display:none"></div>
     </div>
 
     <!-- 高德地图共享 Key -->
@@ -8210,7 +8245,12 @@ function _onSharedModelPresetChange(presetId){
 
 // 从表单读取并保存共享 AI 配置
 async function saveSharedAIFromForm(){
-  if(!isAdmin()){toast('仅管理员可配置','err');return;}
+  console.log('[saveSharedAIFromForm] 开始执行...');
+  if(!isAdmin()){
+    toast('仅管理员可配置','err');
+    console.warn('[saveSharedAIFromForm] 当前用户非 admin,currentUser=', currentUser);
+    return;
+  }
   const modelId    = document.getElementById('shared-model-preset')?.value||'deepseek';
   const modelName  = document.getElementById('shared-model-name')?.value.trim()||'';
   const protocol   = document.getElementById('shared-protocol')?.value||'openai_compat';
@@ -8219,17 +8259,29 @@ async function saveSharedAIFromForm(){
   const dailyLimit = parseInt(document.getElementById('shared-daily-limit')?.value||'50',10);
   const bulkCost   = parseInt(document.getElementById('shared-bulk-cost')?.value||'10',10);
 
+  console.log('[saveSharedAIFromForm] 表单数据:', {modelId, modelName, protocol, endpoint, apiKeyLen: apiKey.length, dailyLimit, bulkCost});
+
   if(!apiKey){toast('API Key 不可为空','err');return;}
   if(!endpoint && protocol!=='google'){toast('请填写 API 端点 URL','err');return;}
   if(!modelName){toast('请填写具体模型名','err');return;}
   if(isNaN(dailyLimit)||dailyLimit<0){toast('每日上限必须 ≥ 0','err');return;}
   if(isNaN(bulkCost)||bulkCost<1){toast('批量倍数必须 ≥ 1','err');return;}
 
+  // 找到保存按钮显示 loading
+  const btns = document.querySelectorAll('button.btn-p');
+  let saveBtn = null;
+  btns.forEach(b=>{ if(b.textContent.includes('保存并启用')||b.textContent.includes('保存中')) saveBtn=b; });
+  if(saveBtn){saveBtn.disabled=true; saveBtn.textContent='⏳ 保存中...';}
+
   const ok = await saveSharedAIConfig({
     modelId, modelName, protocol, endpoint, apiKey,
     dailyLimitPerUser: dailyLimit,
     bulkActionCost: bulkCost,
   });
+
+  if(saveBtn){saveBtn.disabled=false; saveBtn.textContent='💾 保存并启用';}
+
+  console.log('[saveSharedAIFromForm] 保存结果:', ok);
   if(ok) renderPage('ai');
 }
 
