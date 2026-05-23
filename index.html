@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界 CRM · v29.11 (2.1 Stable)</title>
+<title>花花食界 CRM · v30.0 (3.0 Beta)</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
-  花花食界 MiniCRM v29.11 (2.1 Stable) RELEASE
+  花花食界 MiniCRM v30.0 (3.0 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
   v29.2 Stable 修复说明(2026-05-15):
@@ -1265,7 +1265,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · CRM v29.11 (2.1 Stable)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · CRM v30.0 (3.0 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -1884,6 +1884,9 @@ async function loadAllData(){
     console.warn('[loadAllData] 部分数据加载失败:', errors);
     toast(errors[0] + (errors.length>1?` (另有 ${errors.length-1} 项失败,详见控制台)`:''), 'err');
   }
+
+  // v30:加载共享 AI 配置(失败不影响主流程)
+  await loadSharedAIConfig();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1974,6 +1977,8 @@ async function doLogout(){
     await supa.auth.signOut();
     currentUser=null;
     DB=emptyDB(); /* N1 修复:重置所有 7 张表,避免用户切换数据残留 */
+    _sharedAICfg = null; /* v30:清空共享 AI 配置缓存(下次登录时重新加载) */
+    _aiUsageData = null; /* v30:清空 AI 用量缓存 */
     // v29.10:清空 UI 多选状态(防跨账号残留)
     if(typeof selectedTaskIds!=='undefined') selectedTaskIds.clear();
   if(typeof _taskBulkMode!=='undefined') _taskBulkMode = false;
@@ -2085,6 +2090,8 @@ async function submitChangePassword(){
     await supa.auth.signOut();
     currentUser=null;
     DB=emptyDB(); /* N1 修复:重置所有 7 张表,避免用户切换数据残留 */
+    _sharedAICfg = null; /* v30:清空共享 AI 配置缓存(下次登录时重新加载) */
+    _aiUsageData = null; /* v30:清空 AI 用量缓存 */
     // v29.10:清空 UI 多选状态(防跨账号残留)
     if(typeof selectedTaskIds!=='undefined') selectedTaskIds.clear();
   if(typeof _taskBulkMode!=='undefined') _taskBulkMode = false;
@@ -4125,7 +4132,7 @@ ${desc?'当前描述:'+desc:'(暂无描述)'}
 □ 与采购部对齐预算上限
 □ ...`,
     maxTokens:600
-  });
+  , _action:'task_breakdown', _actionLabel:'任务拆解', _cost:1});
 
   if(btn){btn.disabled=false;btn.textContent='🔍 AI 拆解为子项';}
   if(!result){
@@ -4205,7 +4212,7 @@ ${progText}
 
 直接用上面四个粗体小标题输出,不要加多余寒暄。`,
     maxTokens:600
-  });
+  , _action:'summary', _actionLabel:'任务进展总结', _cost:1});
 
   if(btn){btn.disabled=false;btn.textContent='🤖 AI总结';}
   if(!result){
@@ -4268,7 +4275,7 @@ ${recentText}
 
 直接输出,无寒暄。`,
     maxTokens:400
-  });
+  , _action:'task_advice', _actionLabel:'任务 AI 建议', _cost:1});
 
   if(btn){
     btn.disabled=false;
@@ -4357,7 +4364,7 @@ ${assigneeLines}
 
 直接输出,无寒暄。`,
     maxTokens:700
-  });
+  , _action:'insight', _actionLabel:'团队洞察', _cost:1});
 
   if(btn){btn.disabled=false;btn.textContent='🤖 生成团队分析';}
   if(!result){
@@ -4692,18 +4699,174 @@ function getTasksReportData(dateFrom, dateTo, targetUserId){
 // ── 部门/项目组管理(admin 专属)
 // ══════════════════════════════════════════════════════════
 // v29: 用户管理 Hub — 合并用户列表 + 部门管理为 Tab 切换
-let _userHubTab = 'users'; // 'users' | 'depts'
+let _userHubTab = 'users'; // 'users' | 'depts' | 'aiusage'
 function renderUserManagementHub(){
   if(!isAdmin()) return `<div class="pw"><div class="perm-banner">⛔ 仅管理员可访问此页面</div></div>`;
   return `<div class="hub-tabs">
       <button class="hub-tab ${_userHubTab==='users'?'active':''}" onclick="switchUserHubTab('users')">👤 用户列表</button>
       <button class="hub-tab ${_userHubTab==='depts'?'active':''}" onclick="switchUserHubTab('depts')">🏢 部门管理</button>
+      <button class="hub-tab ${_userHubTab==='aiusage'?'active':''}" onclick="switchUserHubTab('aiusage')">📊 AI 用量</button>
     </div>
-    ${_userHubTab==='users' ? renderUsers() : renderDeptManage()}`;
+    ${_userHubTab==='users' ? renderUsers() : (_userHubTab==='depts' ? renderDeptManage() : renderAIUsageStats())}`;
 }
 function switchUserHubTab(tab){
   _userHubTab = tab;
   if(curPage==='users') renderPage('users');
+  // 切到 AI 用量页时,异步加载数据
+  if(tab==='aiusage') setTimeout(()=>loadAIUsageData(), 50);
+}
+
+// ══════════════════════════════════════════════════════════
+// v30 — AI 用量统计页(管理员视角)
+// ══════════════════════════════════════════════════════════
+let _aiUsageRange = 'today'; // 'today' | '7d' | '30d' | 'all'
+let _aiUsageData = null;
+
+function renderAIUsageStats(){
+  if(!isAdmin()) return `<div class="pw"><div class="perm-banner">⛔ 仅管理员可访问此页面</div></div>`;
+
+  if(!_sharedAICfg){
+    return `<div class="pw"><div style="padding:30px;text-align:center;color:var(--ms)">
+      <div style="font-size:48px;margin-bottom:8px">⚙️</div>
+      <h3 style="color:var(--ink)">共享 AI 配置未启用</h3>
+      <p>请先执行 SQL 迁移 <code>migration_v3.0_shared_ai_config.sql</code> 启用共享 AI 配置后,此处才会有数据。</p>
+    </div></div>`;
+  }
+
+  if(_aiUsageData === null){
+    return `<div class="pw"><div style="padding:30px;text-align:center;color:var(--ms)">⏳ 正在加载用量数据...</div></div>`;
+  }
+
+  const rows = _aiUsageData;
+  const total = rows.reduce((s,r)=>s+(Number(r.cost_units)||0),0);
+  const successCount = rows.filter(r=>r.success).length;
+  const failCount = rows.filter(r=>!r.success).length;
+
+  // 按用户分组
+  const byUser = {};
+  rows.forEach(r=>{
+    const k = r.user_id||'unknown';
+    if(!byUser[k]) byUser[k] = {name: r.user_name||'(未命名)', total:0, success:0, fail:0, last:''};
+    const u = byUser[k];
+    u.total += Number(r.cost_units)||0;
+    if(r.success) u.success++; else u.fail++;
+    if(!u.last || r.created_at > u.last) u.last = r.created_at;
+  });
+  const userRows = Object.values(byUser).sort((a,b)=>b.total-a.total);
+
+  // 按动作类型分组
+  const byAction = {};
+  rows.forEach(r=>{
+    const k = r.action_type||'unknown';
+    byAction[k] = (byAction[k]||0) + (Number(r.cost_units)||0);
+  });
+  const actionRows = Object.entries(byAction)
+    .map(([k,v])=>({type:k, count:v}))
+    .sort((a,b)=>b.count-a.count);
+
+  const rangeLabels = {today:'最近 24 小时', '7d':'最近 7 天', '30d':'最近 30 天', 'all':'全部'};
+
+  return `<div class="pw">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--ink)">📊 AI 用量统计</div>
+        <div style="font-size:12px;color:var(--ms);margin-top:3px">查看团队 AI 调用情况,识别异常使用</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${Object.entries(rangeLabels).map(([k,v])=>
+          `<button class="btn btn-sm ${_aiUsageRange===k?'btn-p':''}" onclick="_switchAIUsageRange('${k}')">${v}</button>`
+        ).join('')}
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-bar" style="background:#16a34a"></div><div class="stat-ico">🔢</div><div class="stat-lbl">总调用次数</div><div class="stat-val" style="color:#16a34a">${total}</div><div class="stat-sub">${rangeLabels[_aiUsageRange]}</div></div>
+      <div class="stat-card"><div class="stat-bar" style="background:#2563eb"></div><div class="stat-ico">✓</div><div class="stat-lbl">成功</div><div class="stat-val" style="color:#2563eb">${successCount}</div><div class="stat-sub">${rows.length?Math.round(successCount/rows.length*100):0}% 成功率</div></div>
+      <div class="stat-card"><div class="stat-bar" style="background:#dc2626"></div><div class="stat-ico">✕</div><div class="stat-lbl">失败</div><div class="stat-val" style="color:#dc2626">${failCount}</div><div class="stat-sub">需关注</div></div>
+      <div class="stat-card"><div class="stat-bar" style="background:#f59e0b"></div><div class="stat-ico">👥</div><div class="stat-lbl">活跃用户</div><div class="stat-val" style="color:#f59e0b">${userRows.length}</div><div class="stat-sub">使用过 AI</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-top:16px">
+      <div class="tbl-card">
+        <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--sv);font-weight:600;font-size:13px;color:var(--ink)">👥 按用户排行</div>
+        ${userRows.length===0
+          ? `<div class="empty-st"><div class="ei">📊</div><h3>无数据</h3><p>此时间段内无 AI 调用记录</p></div>`
+          : `<div class="tbl-hd" style="grid-template-columns:2fr 1fr 1fr 1fr;display:grid;padding:8px 14px;background:#fcfdfe;border-bottom:1px solid var(--sv);font-size:11px;color:var(--ms);text-transform:uppercase">
+              <span>用户</span><span>调用次数</span><span>成功/失败</span><span>最后调用</span>
+            </div>
+            ${userRows.map(u=>`<div class="tbl-row" style="grid-template-columns:2fr 1fr 1fr 1fr;display:grid;padding:10px 14px;border-bottom:1px solid #f1f5f9">
+              <span style="font-weight:500">${h(u.name)}</span>
+              <span style="font-weight:700;color:#16a34a">${u.total}</span>
+              <span><span style="color:#16a34a">${u.success}</span> / <span style="color:#dc2626">${u.fail}</span></span>
+              <span style="font-size:11px;color:var(--ms)">${u.last?fd(u.last):'—'}</span>
+            </div>`).join('')}`
+        }
+      </div>
+
+      <div class="tbl-card">
+        <div style="padding:10px 14px;background:#f8fafc;border-bottom:1px solid var(--sv);font-weight:600;font-size:13px;color:var(--ink)">⚙️ 按功能类型</div>
+        ${actionRows.length===0
+          ? `<div class="empty-st" style="padding:30px 20px"><p>无数据</p></div>`
+          : `${actionRows.map(a=>{
+              const label = _aiActionLabel(a.type);
+              return `<div style="padding:10px 14px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:13px">${h(label)}</span>
+                <span style="font-weight:700;color:#16a34a">${a.count}</span>
+              </div>`;
+            }).join('')}`
+        }
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:11px 14px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af;line-height:1.7">
+      💡 <strong>说明:</strong>仅记录使用「共享 AI 配置」时的调用。若员工使用「本地配置」(自带 Key),不计入此统计。<br>
+      📊 数据来自 <code>ai_usage_log</code> 表,日志保留全部历史,可定期清理。
+    </div>
+  </div>`;
+}
+
+function _aiActionLabel(t){
+  const map = {
+    summary:'跟进总结', advice:'AI 跟进建议', analyze:'需求分析',
+    insight:'仪表盘洞察', report:'周报生成', refine:'周报精炼',
+    import_cust:'AI 客户导入', import_task:'AI 任务导入',
+    task_advice:'任务 AI 建议', task_breakdown:'任务拆解',
+    test:'连接测试', generic:'其他',
+  };
+  return map[t]||t;
+}
+
+function _switchAIUsageRange(r){
+  _aiUsageRange = r;
+  _aiUsageData = null;
+  if(curPage==='users') renderPage('users');
+  setTimeout(()=>loadAIUsageData(), 50);
+}
+
+async function loadAIUsageData(){
+  if(!isAdmin()) return;
+  const since = (()=>{
+    const d = new Date();
+    if(_aiUsageRange==='today') d.setHours(d.getHours()-24);
+    else if(_aiUsageRange==='7d') d.setDate(d.getDate()-7);
+    else if(_aiUsageRange==='30d') d.setDate(d.getDate()-30);
+    else return null;
+    return d.toISOString();
+  })();
+  try{
+    let q = supa.from('ai_usage_log').select('*').order('created_at',{ascending:false}).limit(2000);
+    if(since) q = q.gte('created_at', since);
+    const {data, error} = await q;
+    if(error){
+      console.error('[loadAIUsageData]', error);
+      _aiUsageData = [];
+    }else{
+      _aiUsageData = data||[];
+    }
+  }catch(e){
+    _aiUsageData = [];
+  }
+  if(curPage==='users' && _userHubTab==='aiusage') renderPage('users');
 }
 
 function renderDeptManage(){
@@ -5539,7 +5702,7 @@ ${rawText}`;
 
   let result;
   try{
-    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000});
+    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000, _action:'import_task', _actionLabel:'AI 任务批量导入', _cost:10});
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){stEl.style.background='#fee2e2';stEl.style.color='#991b1b';stEl.textContent='❌ AI 调用失败:'+(e.message||e);}
@@ -6466,7 +6629,7 @@ async function aiImportCustAnalyze(){
 
   let result;
   try{
-    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000});
+    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000, _action:'import_cust', _actionLabel:'AI 客户批量导入', _cost:10});
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){stEl.style.background='#fee2e2';stEl.style.color='#991b1b';stEl.textContent='❌ AI 调用失败:'+(e.message||e);}
@@ -7390,6 +7553,158 @@ const AI_MODELS_BUILTIN={
 };
 
 // 加载完整 AI 配置（内置 + 用户自定义）
+// ══════════════════════════════════════════════════════════
+// v30 — 共享 AI 配置(方案 B:管理员统一配置 Key,员工共享)
+// ══════════════════════════════════════════════════════════
+// 共享配置缓存(登录后由 loadSharedAIConfig() 填充)
+let _sharedAICfg = null;
+
+// 加载共享 AI 配置(全公司一份,id='singleton')
+async function loadSharedAIConfig(){
+  try{
+    const {data, error} = await supa.from('ai_shared_config')
+      .select('*').eq('id','singleton').single();
+    if(error){
+      // 表不存在或未执行 SQL 迁移
+      if(String(error.message||'').includes('not exist') ||
+         String(error.code||'')==='42P01' ||
+         String(error.code||'')==='PGRST116'){
+        console.warn('[loadSharedAIConfig] 共享配置表不存在,使用本地配置降级。请执行 migration_v3.0_shared_ai_config.sql');
+        _sharedAICfg = null;
+        return null;
+      }
+      console.error('[loadSharedAIConfig]', error);
+      _sharedAICfg = null;
+      return null;
+    }
+    _sharedAICfg = snakeToCamel(data);
+    return _sharedAICfg;
+  }catch(e){
+    console.error('[loadSharedAIConfig] exception:', e);
+    _sharedAICfg = null;
+    return null;
+  }
+}
+
+// 管理员保存共享配置(只有 admin 能成功)
+async function saveSharedAIConfig(fields){
+  const row = camelToSnake({
+    ...fields,
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUser?.id,
+  });
+  const {error, data} = await supa.from('ai_shared_config')
+    .update(row).eq('id','singleton').select();
+  if(error){
+    toast('保存共享配置失败:'+error.message,'err');
+    return false;
+  }
+  if(!data || data.length===0){
+    toast('保存失败:未更新任何行(可能是 RLS 权限不足,仅 admin 可改)','err');
+    return false;
+  }
+  _sharedAICfg = snakeToCamel(data[0]);
+  toast('✓ 共享 AI 配置已保存,全员立即生效');
+  return true;
+}
+
+// 判断当前是否启用共享配置(管理员已设了 Key)
+function isSharedAIActive(){
+  return !!(_sharedAICfg && (_sharedAICfg.apiKey||'').trim());
+}
+
+// 获取实际使用的 AI 配置(优先共享,fallback 本地)
+// 返回 { source:'shared'|'local', modelId, key, model, endpoint, type, name }
+function getEffectiveAIConfig(){
+  // 共享优先
+  if(isSharedAIActive()){
+    const s = _sharedAICfg;
+    return {
+      source: 'shared',
+      modelId: s.modelId||'deepseek',
+      key: s.apiKey||'',
+      model: s.modelName||'deepseek-chat',
+      endpoint: s.endpoint||'https://api.deepseek.com/v1/chat/completions',
+      type: s.protocol||'openai_compat',
+      name: s.modelId==='deepseek' ? 'DeepSeek (共享)' : (s.modelId+' (共享)'),
+    };
+  }
+  // 降级到本地配置
+  const cfg = loadAIConfig();
+  const modelId = cfg.activeModel||'deepseek';
+  const modelCfg = cfg.models[modelId]||{};
+  const allModels = getAllModels();
+  const meta = allModels[modelId]||{};
+  return {
+    source: 'local',
+    modelId,
+    key: modelCfg.key||'',
+    model: modelCfg.model||meta.models?.[0]||'',
+    endpoint: meta.endpoint||modelCfg.endpoint||'',
+    type: meta.type||'openai_compat',
+    name: meta.name||modelId,
+  };
+}
+
+// 获取实际使用的高德 Key(共享优先,本地降级)
+function getEffectiveAmapKey(){
+  if(isSharedAIActive() && _sharedAICfg.amapKey) return _sharedAICfg.amapKey;
+  return (loadAIConfig().amapKey||'').trim();
+}
+
+// ── AI 用量日志 ─────────────────────────────────────────
+// 异步写日志(不阻塞 UI)
+async function logAIUsage(actionType, actionLabel, costUnits, success, errorMessage, modelId){
+  if(!currentUser) return;
+  try{
+    await supa.from('ai_usage_log').insert({
+      user_id: currentUser.id,
+      user_name: currentUser.name||currentUser.email||'',
+      action_type: actionType||'unknown',
+      action_label: actionLabel||'',
+      cost_units: costUnits||1,
+      model_id: modelId||'',
+      success: !!success,
+      error_message: errorMessage||'',
+    });
+  }catch(e){
+    // 日志失败不影响业务流程
+    console.warn('[logAIUsage]', e);
+  }
+}
+
+// 检查当前用户今日是否还有额度
+// 返回 { allowed:bool, used:number, limit:number, remaining:number }
+async function checkAIUsageQuota(costUnits){
+  if(!currentUser) return {allowed:false, used:0, limit:0, remaining:0, reason:'未登录'};
+  // admin 不受限额约束(便于测试和应急)
+  if(isAdmin()) return {allowed:true, used:0, limit:9999, remaining:9999, reason:''};
+  // 共享配置未启用 → 走本地配置,不检查限额
+  if(!isSharedAIActive()) return {allowed:true, used:0, limit:9999, remaining:9999, reason:''};
+
+  const limit = _sharedAICfg.dailyLimitPerUser || 50;
+  if(limit === 0){
+    // 限额为 0 表示禁用限额检查
+    return {allowed:true, used:0, limit:0, remaining:9999, reason:''};
+  }
+
+  try{
+    const {data, error} = await supa.rpc('user_ai_usage_today', {uid: currentUser.id});
+    if(error){
+      console.warn('[checkAIUsageQuota]', error);
+      return {allowed:true, used:0, limit, remaining:limit, reason:''};  // 失败放行
+    }
+    const used = Number(data)||0;
+    const remaining = Math.max(0, limit - used);
+    const allowed = (used + (costUnits||1)) <= limit;
+    return {allowed, used, limit, remaining,
+      reason: allowed ? '' : `今日 AI 调用已达上限 ${limit} 次(已用 ${used} 次)`};
+  }catch(e){
+    console.warn('[checkAIUsageQuota] exception:', e);
+    return {allowed:true, used:0, limit, remaining:limit, reason:''};
+  }
+}
+
 function loadAIConfig(){
   try{
     const raw=localStorage.getItem('huahua_ai_v25_config');
@@ -7443,39 +7758,70 @@ function getAllModels(){
 }
 
 // ── 统一 AI 调用入口 ─────────────────────────────────────
-async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null}){
-  const cfg=loadAIConfig();
-  const modelId=cfg.activeModel||'deepseek';
-  const modelCfg=cfg.models[modelId]||{};
-  const allModels=getAllModels();
-  const meta=allModels[modelId];
-
-  if(!modelCfg.key?.trim()){
-    toast('请先在「AI设置」页面配置 '+(meta?.name||modelId)+' API Key','err');
-    nav(document.querySelector('[data-page=ai]'),'ai');
-    return null;
-  }
-
-  try{
-    // 判断调用类型
-    const mtype=meta?.type||'openai_compat';
-    if(mtype==='claude'){
-      return await _callClaude(system,prompt,maxTokens,modelCfg,stream,onChunk);
-    }else if(mtype==='gemini'){
-      return await _callGemini(system,prompt,maxTokens,modelCfg);
+// v30 改造:
+//   1. 优先使用管理员配置的共享 Key(降级到本地配置)
+//   2. 调用前检查当日限额(普通用户),admin 不限
+//   3. 调用后写日志(success 或 fail)
+// 调用方可传 _action 和 _cost 参数标记本次调用的业务类型和成本权重
+async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
+                       _action='generic', _actionLabel='', _cost=1}){
+  // 1. 解析有效配置(共享优先 / 本地降级)
+  const eff = getEffectiveAIConfig();
+  if(!eff.key?.trim()){
+    if(isAdmin()){
+      toast('请在「AI设置 → 共享配置」填写 API Key(管理员配置,全员共享)','err');
+      nav(document.querySelector('[data-page=ai]'),'ai');
     }else{
-      // openai_compat：DeepSeek、豆包、千问及所有自定义模型
-      const endpoint=meta?.endpoint||modelCfg.endpoint||'';
-      if(!endpoint){ toast('该模型未配置API端点','err'); return null; }
-      return await _callOpenAICompat(endpoint,system,prompt,maxTokens,modelCfg,stream,onChunk);
+      toast('AI 功能暂未启用,请联系管理员在「AI 设置」中配置 API Key','err');
     }
-  }catch(e){
-    const msg=e.message||String(e);
-    if(msg.includes('401')||msg.includes('403'))toast('API Key 无效，请在 AI 设置中重新配置','err');
-    else if(msg.includes('fetch')||msg.includes('network')||msg.includes('Failed'))toast('网络连接失败，请检查网络','err');
-    else toast('AI调用失败：'+msg,'err');
     return null;
   }
+
+  // 2. 检查限额(仅当使用共享配置且非 admin)
+  if(eff.source==='shared' && !isAdmin()){
+    const q = await checkAIUsageQuota(_cost);
+    if(!q.allowed){
+      toast(`⛔ ${q.reason}。如需提高限额,请联系管理员。`,'err');
+      return null;
+    }
+  }
+
+  // 3. 调用 AI
+  let result = null;
+  let errMsg = '';
+  let ok = false;
+  try{
+    const mtype = eff.type;
+    const modelCfg = {key: eff.key, model: eff.model, endpoint: eff.endpoint};
+    if(mtype==='claude' || mtype==='anthropic'){
+      result = await _callClaude(system,prompt,maxTokens,modelCfg,stream,onChunk);
+    }else if(mtype==='gemini' || mtype==='google'){
+      result = await _callGemini(system,prompt,maxTokens,modelCfg);
+    }else{
+      // openai_compat:DeepSeek、豆包、千问及所有自定义模型
+      if(!eff.endpoint){ toast('该模型未配置 API 端点','err'); return null; }
+      result = await _callOpenAICompat(eff.endpoint,system,prompt,maxTokens,modelCfg,stream,onChunk);
+    }
+    ok = !!result;
+  }catch(e){
+    errMsg = e.message||String(e);
+    if(errMsg.includes('401')||errMsg.includes('403')){
+      if(isAdmin()) toast('API Key 无效,请在 AI 设置中重新配置','err');
+      else toast('AI 服务认证失败,请联系管理员','err');
+    }else if(errMsg.includes('fetch')||errMsg.includes('network')||errMsg.includes('Failed')){
+      toast('网络连接失败,请检查网络','err');
+    }else{
+      toast('AI 调用失败:'+errMsg,'err');
+    }
+    result = null;
+  }
+
+  // 4. 写用量日志(仅当使用共享配置时;本地配置不计入企业账)
+  if(eff.source==='shared'){
+    logAIUsage(_action, _actionLabel, _cost, ok, errMsg, eff.modelId);
+  }
+
+  return result;
 }
 
 async function _callClaude(system,prompt,maxTokens,cfg,stream,onChunk){
@@ -7552,7 +7898,7 @@ async function testAIConnection(modelId){
   const t0=Date.now();
   const savedActive=cfg.activeModel;
   cfg.activeModel=modelId;saveAIConfig(cfg);
-  const result=await callAI({system:'',prompt:'请只回复两个字：OK',maxTokens:10});
+  const result=await callAI({system:'',prompt:'请只回复两个字：OK',maxTokens:10, _action:'test', _actionLabel:'连接测试', _cost:1});
   cfg.activeModel=savedActive;saveAIConfig(cfg);
   const ms=Date.now()-t0;
   if(resultEl){
@@ -7566,6 +7912,9 @@ function renderAISettings(){
   const cfg=loadAIConfig();
   const activeModel=cfg.activeModel||'deepseek';
   const allModels=getAllModels();
+
+  // v30:共享配置区(放最顶,管理员配置,员工只读)
+  const sharedSection = renderSharedAIConfigSection();
 
   // 模型卡片列表（内置 DeepSeek + 用户自定义）
   const modelCards=Object.entries(allModels).map(([id,meta])=>{
@@ -7632,6 +7981,8 @@ function renderAISettings(){
   <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:4px">🤖 AI模型设置</div>
   <div style="font-size:13px;color:var(--ms);margin-bottom:18px">选择并配置您的AI模型，配置后可在跟进记录、周报生成等功能中使用</div>
 
+  ${sharedSection}
+
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
     <div style="font-size:12px;font-weight:600;color:var(--sl);text-transform:uppercase;letter-spacing:.5px">已有模型</div>
     <button class="btn btn-p btn-sm" onclick="openAddModelModal()">+ 添加模型</button>
@@ -7673,6 +8024,264 @@ function renderAISettings(){
 </div>`;
 }
 
+
+// ══════════════════════════════════════════════════════════
+// v30 — 共享 AI 配置 UI(管理员配置区 + 员工只读视图)
+// ══════════════════════════════════════════════════════════
+function renderSharedAIConfigSection(){
+  const isAdminUser = isAdmin();
+  const sActive = isSharedAIActive();
+  const s = _sharedAICfg || {};
+
+  // 共享配置不存在(SQL 未执行)
+  if(_sharedAICfg === null){
+    if(!isAdminUser) return ''; // 普通用户不看到这个警告
+    return `<div class="ai-cfg-box" style="background:#fffbeb;border:1px solid #fde68a;margin-bottom:18px">
+      <div style="font-weight:600;color:#92400e;margin-bottom:6px">⚠ 共享 AI 配置未启用</div>
+      <div style="font-size:12px;color:#78350f;line-height:1.7">
+        请先在 Supabase 后台执行 SQL 迁移文件 <code>migration_v3.0_shared_ai_config.sql</code> 来创建共享配置表。
+        <br>执行完成后刷新页面,即可在此处配置全公司共享的 AI Key。
+        <br><br>当前 AI 功能仍按"每人各自本地配置"的旧方式运行。
+      </div>
+    </div>`;
+  }
+
+  // 共享配置存在但管理员未填 Key(员工友好提示)
+  if(!sActive && !isAdminUser){
+    return `<div class="ai-cfg-box" style="background:#eff6ff;border:1px solid #bfdbfe;margin-bottom:18px">
+      <div style="font-weight:600;color:#1e40af;margin-bottom:6px">💡 AI 功能暂未开通</div>
+      <div style="font-size:12px;color:#1e3a8a;line-height:1.7">
+        管理员尚未为公司配置共享的 AI API Key。配置后,所有员工将自动获得 AI 功能(无需各自申请),费用由公司统一承担。
+        <br><br>请联系管理员在「AI 设置」中完成配置。
+      </div>
+    </div>`;
+  }
+
+  // 员工视角:共享已激活,只读卡片
+  if(!isAdminUser){
+    return `<div class="ai-cfg-box" style="background:#f0fdf4;border:1px solid #bbf7d0;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px">✓</div>
+        <div>
+          <div style="font-weight:600;color:#166534;font-size:14px">公司已统一配置 AI 服务</div>
+          <div style="font-size:11px;color:#15803d;margin-top:2px">您可直接在 CRM 各处使用 AI 功能,费用由公司统一承担。</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#166534;line-height:1.7;padding-top:8px;border-top:1px solid #bbf7d0;margin-top:8px">
+        <div>当前模型:<strong>${h(s.modelId||'')} (${h(s.modelName||'')})</strong></div>
+        <div>每日上限:<strong>${s.dailyLimitPerUser===0?'无限制':(s.dailyLimitPerUser||50)+' 次/人'}</strong>${s.bulkActionCost>1?` · 批量操作按 <strong>${s.bulkActionCost}</strong> 次计`:''}</div>
+      </div>
+      <div id="my-ai-usage-today" style="font-size:11px;color:#15803d;margin-top:8px"></div>
+      <script>setTimeout(()=>refreshMyAIUsage(),100);<\/script>
+    </div>`;
+  }
+
+  // 管理员视角:可编辑卡片
+  const modelOpts = [
+    {id:'deepseek', label:'DeepSeek(推荐 · 国内直连)', protocol:'openai_compat',
+     endpoint:'https://api.deepseek.com/v1/chat/completions', models:['deepseek-chat','deepseek-reasoner']},
+    {id:'claude', label:'Claude(Anthropic)', protocol:'anthropic',
+     endpoint:'https://api.anthropic.com/v1/messages', models:['claude-sonnet-4-5','claude-opus-4-5','claude-haiku-4-5']},
+    {id:'gemini', label:'Gemini(Google)', protocol:'google',
+     endpoint:'https://generativelanguage.googleapis.com/v1beta/models', models:['gemini-2.0-flash','gemini-2.5-pro']},
+    {id:'custom', label:'自定义(豆包/千问/智谱等 OpenAI 兼容)', protocol:'openai_compat',
+     endpoint:'', models:[]},
+  ];
+
+  return `<div class="ai-cfg-box" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #16a34a;margin-bottom:18px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <div style="width:32px;height:32px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px">👑</div>
+      <div>
+        <div style="font-weight:700;color:#166534;font-size:15px">公司共享 AI 配置(管理员专用)</div>
+        <div style="font-size:11px;color:#15803d;margin-top:2px">在此处配置 1 次,全公司员工自动使用,费用归到您的 API 账户</div>
+      </div>
+      ${sActive?'<span class="bdg" style="background:#16a34a;color:#fff;margin-left:auto">✓ 已启用</span>':'<span class="bdg" style="background:#f59e0b;color:#fff;margin-left:auto">待启用</span>'}
+    </div>
+
+    <div class="form-grid">
+      <div class="fg full">
+        <label>AI 服务商<span class="req">*</span></label>
+        <select id="shared-model-preset" onchange="_onSharedModelPresetChange(this.value)" style="margin-bottom:4px">
+          ${modelOpts.map(o=>`<option value="${o.id}" ${s.modelId===o.id?'selected':''}>${o.label}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="fg">
+        <label>具体模型</label>
+        <input id="shared-model-name" value="${h(s.modelName||'')}" placeholder="如:deepseek-chat" style="font-family:monospace;font-size:12px">
+      </div>
+      <div class="fg">
+        <label>协议类型</label>
+        <select id="shared-protocol">
+          <option value="openai_compat" ${s.protocol==='openai_compat'?'selected':''}>OpenAI 兼容</option>
+          <option value="anthropic" ${s.protocol==='anthropic'?'selected':''}>Anthropic (Claude)</option>
+          <option value="google" ${s.protocol==='google'?'selected':''}>Google (Gemini)</option>
+        </select>
+      </div>
+
+      <div class="fg full">
+        <label>API 端点 URL<span class="req">*</span></label>
+        <input id="shared-endpoint" value="${h(s.endpoint||'')}" placeholder="如:https://api.deepseek.com/v1/chat/completions" style="font-family:monospace;font-size:11px">
+      </div>
+
+      <div class="fg full">
+        <label>API Key<span class="req">*</span> <span style="font-weight:400;color:var(--ms);font-size:11px">(全公司共享,请妥善保管)</span></label>
+        <input type="password" id="shared-api-key" value="${h(s.apiKey||'')}" placeholder="粘贴 API Key" style="font-family:monospace;font-size:12px">
+      </div>
+
+      <div class="fg">
+        <label>每人每日上限<span class="req">*</span></label>
+        <input type="number" id="shared-daily-limit" value="${s.dailyLimitPerUser??50}" min="0" max="9999">
+        <div style="font-size:10px;color:var(--ms);margin-top:3px">0 = 无限制 · admin 不受限</div>
+      </div>
+      <div class="fg">
+        <label>批量操作计费倍数</label>
+        <input type="number" id="shared-bulk-cost" value="${s.bulkActionCost??10}" min="1" max="100">
+        <div style="font-size:10px;color:var(--ms);margin-top:3px">批量导入算几次,推荐 10</div>
+      </div>
+
+      <div class="fg full" style="background:#fef3c7;border-radius:7px;padding:8px 10px;font-size:11px;color:#92400e;line-height:1.6">
+        ⚠ <strong>注意:</strong>API Key 会被员工的浏览器加载(为了直连 AI 服务)。即便保密,员工仍可通过浏览器开发者工具查看。建议:
+        ① 使用单独的"团队共享 Key"(便于在出问题时单独作废而不影响您个人 Key)
+        ② 定期监控 AI 服务商后台余额
+        ③ 离职员工较多时定期更换 Key
+      </div>
+
+      <div class="fg full" style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+        <button class="btn" onclick="testSharedAIConnection()">🧪 测试连接</button>
+        <button class="btn btn-p" onclick="saveSharedAIFromForm()">💾 保存并启用</button>
+      </div>
+      <div id="shared-test-result" class="ai-test-result" style="display:none"></div>
+    </div>
+
+    <!-- 高德地图共享 Key -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #16a34a">
+      <div style="font-weight:600;color:#166534;font-size:13px;margin-bottom:8px">🗺 共享高德地图 Web 服务 Key(可选)</div>
+      <div class="form-grid">
+        <div class="fg full">
+          <input type="text" id="shared-amap-key" value="${h(s.amapKey||'')}" placeholder="高德 Web 服务 Key(用于外勤打卡)" style="font-family:monospace;font-size:12px"
+            onchange="saveSharedAmapFromForm(this.value)">
+          <div style="font-size:11px;color:var(--ms);margin-top:4px">lbs.amap.com 免费申请,每日 5000 次。配置后全员的位置打卡都能解析详细地址。</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// 显示我当前的 AI 用量(员工卡片底部)
+async function refreshMyAIUsage(){
+  const el = document.getElementById('my-ai-usage-today');
+  if(!el || !currentUser) return;
+  if(!isSharedAIActive() || isAdmin()) return;
+  try{
+    const {data} = await supa.rpc('user_ai_usage_today', {uid: currentUser.id});
+    const used = Number(data)||0;
+    const limit = _sharedAICfg.dailyLimitPerUser||50;
+    if(limit === 0){
+      el.innerHTML = `📊 今日已用 <strong>${used}</strong> 次(无限制)`;
+    }else{
+      const remaining = Math.max(0, limit - used);
+      const pct = Math.min(100, Math.round(used/limit*100));
+      const barColor = pct>=90 ? '#dc2626' : (pct>=70 ? '#f59e0b' : '#16a34a');
+      el.innerHTML = `📊 今日用量:<strong>${used} / ${limit}</strong> 次(剩余 ${remaining} 次)
+        <div style="height:5px;background:#e5e7eb;border-radius:3px;margin-top:5px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${barColor};transition:width .3s"></div>
+        </div>`;
+    }
+  }catch(e){
+    // 静默
+  }
+}
+
+// 服务商预设变更 → 联动 endpoint / model_name / protocol
+function _onSharedModelPresetChange(presetId){
+  const presets = {
+    deepseek: {endpoint:'https://api.deepseek.com/v1/chat/completions', model:'deepseek-chat', protocol:'openai_compat'},
+    claude:   {endpoint:'https://api.anthropic.com/v1/messages', model:'claude-sonnet-4-5', protocol:'anthropic'},
+    gemini:   {endpoint:'', model:'gemini-2.0-flash', protocol:'google'},
+    custom:   {endpoint:'', model:'', protocol:'openai_compat'},
+  };
+  const p = presets[presetId];
+  if(!p) return;
+  document.getElementById('shared-endpoint').value = p.endpoint;
+  document.getElementById('shared-model-name').value = p.model;
+  document.getElementById('shared-protocol').value = p.protocol;
+}
+
+// 从表单读取并保存共享 AI 配置
+async function saveSharedAIFromForm(){
+  if(!isAdmin()){toast('仅管理员可配置','err');return;}
+  const modelId    = document.getElementById('shared-model-preset')?.value||'deepseek';
+  const modelName  = document.getElementById('shared-model-name')?.value.trim()||'';
+  const protocol   = document.getElementById('shared-protocol')?.value||'openai_compat';
+  const endpoint   = document.getElementById('shared-endpoint')?.value.trim()||'';
+  const apiKey     = document.getElementById('shared-api-key')?.value.trim()||'';
+  const dailyLimit = parseInt(document.getElementById('shared-daily-limit')?.value||'50',10);
+  const bulkCost   = parseInt(document.getElementById('shared-bulk-cost')?.value||'10',10);
+
+  if(!apiKey){toast('API Key 不可为空','err');return;}
+  if(!endpoint && protocol!=='google'){toast('请填写 API 端点 URL','err');return;}
+  if(!modelName){toast('请填写具体模型名','err');return;}
+  if(isNaN(dailyLimit)||dailyLimit<0){toast('每日上限必须 ≥ 0','err');return;}
+  if(isNaN(bulkCost)||bulkCost<1){toast('批量倍数必须 ≥ 1','err');return;}
+
+  const ok = await saveSharedAIConfig({
+    modelId, modelName, protocol, endpoint, apiKey,
+    dailyLimitPerUser: dailyLimit,
+    bulkActionCost: bulkCost,
+  });
+  if(ok) renderPage('ai');
+}
+
+// 保存共享高德 Key
+async function saveSharedAmapFromForm(val){
+  if(!isAdmin()){toast('仅管理员可配置','err');return;}
+  const ok = await saveSharedAIConfig({amapKey: (val||'').trim()});
+  if(ok && (val||'').trim()) toast('✓ 共享高德地图 Key 已保存');
+}
+
+// 测试共享 AI 连接(用表单中的值,未保存也可测)
+async function testSharedAIConnection(){
+  if(!isAdmin()){toast('仅管理员可测试','err');return;}
+  const resEl = document.getElementById('shared-test-result');
+  if(!resEl) return;
+  resEl.style.display = 'block';
+  resEl.className = 'ai-test-result';
+  resEl.textContent = '⏳ 正在测试连接...';
+
+  const key = document.getElementById('shared-api-key')?.value.trim();
+  const endpoint = document.getElementById('shared-endpoint')?.value.trim();
+  const model = document.getElementById('shared-model-name')?.value.trim();
+  const protocol = document.getElementById('shared-protocol')?.value;
+
+  if(!key){
+    resEl.className = 'ai-test-result err';
+    resEl.textContent = '✕ 请先填写 API Key';
+    return;
+  }
+
+  try{
+    const modelCfg = {key, model, endpoint};
+    let result = null;
+    if(protocol==='anthropic'){
+      result = await _callClaude('', '说"测试成功"四个字', 30, modelCfg, false, null);
+    }else if(protocol==='google'){
+      result = await _callGemini('', '说"测试成功"四个字', 30, modelCfg);
+    }else{
+      result = await _callOpenAICompat(endpoint, '', '说"测试成功"四个字', 30, modelCfg, false, null);
+    }
+    if(result){
+      resEl.className = 'ai-test-result ok';
+      resEl.textContent = '✓ 连接成功!AI 返回:'+String(result).slice(0,50);
+    }else{
+      resEl.className = 'ai-test-result err';
+      resEl.textContent = '✕ 连接失败,请检查 Key 和端点';
+    }
+  }catch(e){
+    resEl.className = 'ai-test-result err';
+    resEl.textContent = '✕ '+(e.message||'未知错误');
+  }
+}
 
 // 切换激活模型
 function selectAIModel(modelId){
@@ -7804,7 +8413,7 @@ ${fuHistory.length?fuHistory.map(f=>`- ${f.createdAt}[${f.type}] ${f.content.sli
 2. 下一步最佳行动建议（3条，具体可执行）
 3. 需要注意的风险点（1-2条）`,
     maxTokens:400
-  });
+  , _action:'advice', _actionLabel:'客户 AI 建议', _cost:1});
   if(btn){btn.disabled=false;btn.textContent='💡 AI建议';}
   if(result&&box){
     box.style.display='block';
@@ -7831,7 +8440,7 @@ async function aiAnalyzeDemand(){
 需求描述：${demand}
 回复150字以内，结构清晰。`,
     maxTokens:400
-  });
+  , _action:'analyze', _actionLabel:'需求分析', _cost:1});
   if(btn){btn.disabled=false;btn.textContent='🔍 AI分析需求';}
   if(result&&box){
     box.style.display='block';
@@ -7863,7 +8472,7 @@ async function aiDashboardInsight(){
 状态分布：活跃${vc.filter(c=>c.status==='活跃').length}，跟进中${vc.filter(c=>c.status==='跟进中').length}，流失${vc.filter(c=>c.status==='流失').length}
 请给出3-5条简洁的销售管理洞察和建议，每条不超过50字，bullet格式。`,
     maxTokens:400
-  });
+  , _action:'insight', _actionLabel:'仪表盘洞察', _cost:1});
   if(btn){btn.disabled=false;btn.textContent='🤖 AI洞察';}
   if(result&&box){
     _dashInsightDone=true;
@@ -7914,8 +8523,8 @@ function captureLocation(){
   navigator.geolocation.getCurrentPosition(pos=>{
     const{latitude:lat,longitude:lng}=pos.coords;
     if(btn){btn.disabled=false;btn.textContent='📍 记录位置';}
-    // 尝试高德逆地理编码（需要用户配置Key）
-    const amapKey=loadAIConfig().amapKey||'';
+    // v30:优先用共享 Key,降级到本地配置
+    const amapKey=getEffectiveAmapKey();
     if(amapKey){
       fetch(`https://restapi.amap.com/v3/geocode/regeo?key=${amapKey}&location=${lng},${lat}&extensions=base`)
         .then(r=>r.json())
@@ -8294,7 +8903,7 @@ ${(()=>{ const td=getTasksReportData(r.from,r.to,isAdmin()?repState.mgr:null); r
     const result=await callAI({
       system:'你是北京花花食界食品科技有限公司的专业销售数据分析师。请根据以下CRM数据生成结构完整、语言专业的中文客户跟进周报。',
       prompt,
-      maxTokens:1500,
+      maxTokens:1500, _action:'report', _actionLabel:'AI 生成周报', _cost:3,
       stream:true,
       onChunk:(chunk,full)=>{
         repState.report=full;
@@ -8389,7 +8998,7 @@ async function aiRefineReport(){
     system:'你是专业的商业写作助理，擅长将销售报告精炼为管理层汇报材料。',
     prompt:`请将以下销售周报精炼为更专业的管理层汇报版本，保持所有数据准确性，保留关键客户的跟进明细，提升语言专业度，总字数控制在800字以内，使用markdown格式：\n\n${repState.report}`,
     maxTokens:1500
-  });
+  , _action:'refine', _actionLabel:'周报精炼', _cost:1});
   if(result){
     repState.report=result;repState.source='ai';repState.isLocalDone=false;
     toast('✨ AI精炼完成！','ai');
@@ -9688,7 +10297,7 @@ async function aiSummarizeFU(){
     system:'你是一位专业的销售助理，擅长提炼客户跟进要点。回复只输出总结内容，不加前缀。',
     prompt:`请将以下销售跟进记录总结为简洁专业的中文摘要（100字以内），突出：客户态度、关键信息点、谈判进展。\n原文：${content}`,
     maxTokens:300
-  });
+  , _action:'summary', _actionLabel:'跟进总结', _cost:1});
   if(btn){btn.disabled=false;btn.textContent='🤖 AI总结';}
   if(result){
     const area=document.getElementById('ai-sum-area');
@@ -10026,6 +10635,8 @@ supa.auth.onAuthStateChange(async(event,session)=>{
     if(currentUser){
       currentUser=null;
       DB=emptyDB(); /* N1 修复:重置所有 7 张表,避免用户切换数据残留 */
+    _sharedAICfg = null; /* v30:清空共享 AI 配置缓存(下次登录时重新加载) */
+    _aiUsageData = null; /* v30:清空 AI 用量缓存 */
     // v29.10:清空 UI 多选状态(防跨账号残留)
     if(typeof selectedTaskIds!=='undefined') selectedTaskIds.clear();
   if(typeof _taskBulkMode!=='undefined') _taskBulkMode = false;
