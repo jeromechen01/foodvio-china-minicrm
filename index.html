@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界 CRM · v30.0.3 (3.0 Beta)</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<title>花花食界客户与任务管理系统 · v32.4 (3.2 Beta)</title>
+<!-- v31.0.2: 移除 Google Fonts(国内访问超时),改用系统字体回退 -->
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
-  花花食界 MiniCRM v30.0.3 (3.0 Beta) RELEASE
+  花花食界客户与任务管理系统 v32.4 (3.2 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
   v29.2 Stable 修复说明(2026-05-15):
@@ -254,6 +254,25 @@ window.supabase = (function(){
       const qb = {
         select(cols='*'){ _select=cols; return qb; },
         eq(col, val){ _filters.push(`${col}=eq.${encodeURIComponent(val)}`); return qb; },
+        // v31:增加常用查询方法
+        neq(col, val){ _filters.push(`${col}=neq.${encodeURIComponent(val)}`); return qb; },
+        gt(col, val){ _filters.push(`${col}=gt.${encodeURIComponent(val)}`); return qb; },
+        gte(col, val){ _filters.push(`${col}=gte.${encodeURIComponent(val)}`); return qb; },
+        lt(col, val){ _filters.push(`${col}=lt.${encodeURIComponent(val)}`); return qb; },
+        lte(col, val){ _filters.push(`${col}=lte.${encodeURIComponent(val)}`); return qb; },
+        // in: values 是数组
+        in(col, values){
+          const list = (values||[]).map(v=>encodeURIComponent(v)).join(',');
+          _filters.push(`${col}=in.(${list})`);
+          return qb;
+        },
+        // is: 通常用于 is null
+        is(col, val){ _filters.push(`${col}=is.${val}`); return qb; },
+        // or: 接受逗号分隔的条件串,如 "to_user.eq.UID,from_user.eq.UID"
+        or(expr){
+          _filters.push(`or=(${expr})`);
+          return qb;
+        },
         order(col, opts={}){
           _order = col + (opts.ascending===false ? '.desc' : '.asc');
           return qb;
@@ -591,7 +610,7 @@ window.supabase = (function(){
   --r:10px;--sb:228px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;font-family:'Noto Sans SC',system-ui,sans-serif;font-size:14px;color:var(--ink);background:#f1f5f9}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",system-ui,sans-serif;font-size:14px;color:var(--ink);background:#f1f5f9}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
 
@@ -1018,6 +1037,27 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
 .acts{display:flex;gap:4px}
 .empty-st{text-align:center;padding:50px 20px;color:var(--ms)}
 .empty-st .ei{font-size:40px;margin-bottom:12px}
+/* v31:消息中心 */
+.msg-tabs button.msg-tab{background:none;border:none;padding:9px 14px;font-size:13px;color:var(--ms);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.msg-tabs button.msg-tab:hover{color:var(--ink)}
+.msg-tabs button.msg-tab.active{color:var(--g);border-bottom-color:var(--g);font-weight:600}
+.msg-tab-badge{background:#dc2626;color:#fff;font-size:10px;min-width:18px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-weight:600}
+.msg-card{display:flex;gap:12px;padding:14px;background:#fff;border:1px solid var(--sv);border-radius:10px;margin-bottom:10px;cursor:pointer;transition:all .15s}
+.msg-card:hover{border-color:var(--g);box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.msg-card.msg-unread{background:#fafffc;border-left:3px solid var(--g)}
+.msg-card-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.msg-card-body{flex:1;min-width:0}
+.msg-card-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.msg-card-type{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.msg-card-time{font-size:11px;color:var(--ms)}
+.msg-card-title{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:3px}
+.msg-card-meta{font-size:11px;color:var(--ms);margin-bottom:6px}
+.msg-card-content{font-size:13px;color:var(--sl);line-height:1.6;background:#f8fafc;padding:7px 10px;border-radius:6px;margin-top:6px;word-break:break-word}
+.msg-card-actions{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.msg-dot{display:inline-block;width:6px;height:6px;background:#dc2626;border-radius:50%;margin-right:6px;vertical-align:middle}
+/* v31:任务详情协作工具栏 */
+.tsk-collab-bar{padding:10px 12px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:9px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tsk-collab-bar .bdg{padding:4px 8px;border-radius:4px;font-weight:500}
 .empty-st h3{font-size:14px;font-weight:600;color:var(--sl);margin-bottom:5px}
 
 /* ── USER MGMT TABLE ── */
@@ -1255,8 +1295,8 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-icon">🌿</div>
-      <h1>花花食界 CRM</h1>
-      <p>客户与任务管理系统 · v2.0 · 内部专用</p>
+      <h1>花花食界客户与任务管理系统</h1>
+      <p>内部专用 · v3.2</p>
     </div>
     <div class="login-field">
       <label>公司邮箱</label>
@@ -1291,7 +1331,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-icon">🌿</div>
         <div>
           <div class="sb-name">花花食界</div>
-          <div class="sb-sub">CRM · 客户与任务 · v2.1</div>
+          <div class="sb-sub">客户与任务管理系统 · v3.2</div>
         </div>
       </div>
     </div>
@@ -1356,6 +1396,11 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <span class="ni">🤖</span>AI设置
       </div>
 
+      <!-- v31:消息中心(放在 AI 设置之后) -->
+      <div class="nav-item" data-page="messages" onclick="nav(this,'messages')">
+        <span class="ni">💬</span>消息中心<span class="nav-badge" id="nav-msg-count" style="display:none;background:#dc2626">0</span>
+      </div>
+
       <div class="sb-div"></div>
       <div class="sb-sec">数据概览</div>
       <div class="sb-stats">
@@ -1365,7 +1410,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · CRM v30.0.3 (3.0 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v32.4 (3.2 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -1693,7 +1738,7 @@ function showNetError(){
 let DB={customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[]};
 // N1 修复:统一的 DB 重置函数,确保所有 7 张表都被清空(避免用户切换时数据残留)
 function emptyDB(){
-  return {customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[]};
+  return {customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[], messages:[], taskAssignees:[]};
 }
 let currentUser=null;
 
@@ -1735,20 +1780,34 @@ function visibleTasks(includeArchived=false){
   if(!isAdmin()){
     const myDeptIds = myLeadingDeptIds();
     const uid = currentUser?.id;
+    // v32:加入协作者维度 — 我是 task_assignees 成员的任务也可见
+    const myCollabTaskIds = new Set(
+      (DB.taskAssignees||[]).filter(a=>a.userId===uid).map(a=>a.taskId)
+    );
     list = list.filter(t=>(
          t.assigneeId===uid
       || t.assignerId===uid
       || t.createdBy ===uid
+      || myCollabTaskIds.has(t.id)      // v32:作为协作者
       || (t.departmentId && myDeptIds.includes(t.departmentId))
     ));
   }
   if(!includeArchived) list = list.filter(t=>t.status!=='archived');
   return list;
 }
-// 仅"我的任务":作为负责人的(用于个人视图)
+// 仅"我的任务":作为主负责人 + 创建人(=第一责任人)+ 协作者(=第二责任人)
 function myTasks(includeArchived=false){
   if(!currentUser) return [];
-  let list = DB.tasks.filter(t=>t.assigneeId===currentUser.id);
+  const uid = currentUser.id;
+  // v32:扩展"我的任务" — 主负责人 OR 创建人(始终保留)OR 协作者
+  const myCollabTaskIds = new Set(
+    (DB.taskAssignees||[]).filter(a=>a.userId===uid).map(a=>a.taskId)
+  );
+  let list = DB.tasks.filter(t=>
+    t.assigneeId===uid
+    || t.createdBy===uid          // v32:创建人始终是第一责任人,任务在我的列表显示
+    || myCollabTaskIds.has(t.id)  // v32:协作者
+  );
   if(!includeArchived) list = list.filter(t=>t.status!=='archived');
   return list;
 }
@@ -1768,16 +1827,54 @@ function visibleProgress(taskId){
     .filter(p=>p.taskId===taskId)
     .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }
+
+// v32:获取某任务的所有负责人(包括主 + 协作)
+function getTaskAssignees(taskId){
+  return (DB.taskAssignees||[]).filter(a=>a.taskId===taskId);
+}
+// v32:判断当前用户是否为某任务的"参与方"(创建人/主/协作)
+function isTaskParticipant(t){
+  if(!t||!currentUser) return false;
+  if(t.createdBy===currentUser.id) return true;
+  if(t.assigneeId===currentUser.id) return true;
+  return getTaskAssignees(t.id).some(a=>a.userId===currentUser.id);
+}
+// v32:判断当前用户是否为主负责人(可以改派/关闭)
+function isTaskPrimary(t){
+  if(!t||!currentUser) return false;
+  if(t.assigneeId===currentUser.id) return true;
+  // 在 task_assignees 中 role=primary 也算
+  return getTaskAssignees(t.id).some(a=>a.userId===currentUser.id && a.role==='primary');
+}
+
 // 判断当前用户对某任务的可操作权限
+// v32.2 修复 R6.1:协作者只能记录进展,不能编辑任务字段;canRecordProgress 单独分出
 function canEditTask(t){
   if(!t||!currentUser) return false;
   if(isAdmin()) return true;
+  // 主负责人 / 指派人 / 创建人 可编辑任务
   if(t.assigneeId===currentUser.id||t.assignerId===currentUser.id||t.createdBy===currentUser.id) return true;
+  // 部门 leader 也可编辑
   return t.departmentId && myLeadingDeptIds().includes(t.departmentId);
+}
+// v32.2 新增:可记录进展的人(协作者也包括)
+function canRecordProgress(t){
+  if(!t||!currentUser) return false;
+  if(canEditTask(t)) return true;
+  // 协作者也可记录进展
+  return getTaskAssignees(t.id).some(a=>a.userId===currentUser.id);
 }
 function canDeleteTask(t){
   if(!t||!currentUser) return false;
   return isAdmin() || t.createdBy===currentUser.id;
+}
+// v32:仅主负责人 / 创建人 / admin 可改派
+function canReassignTask(t){
+  if(!t||!currentUser) return false;
+  if(isAdmin()) return true;
+  if(t.createdBy===currentUser.id) return true;
+  if(t.assigneeId===currentUser.id) return true;
+  return false;
 }
 // 占位:UI 章节会实现 refreshTasks
 function refreshTasks(){ /* 由 UI 模块实现 */ }
@@ -1790,7 +1887,8 @@ function saveCache(){
   try{sessionStorage.setItem(CACHE_KEY,JSON.stringify({
     customers:DB.customers,followups:DB.followups,profiles:DB.profiles,
     tasks:DB.tasks,taskProgress:DB.taskProgress,
-    departments:DB.departments,departmentMembers:DB.departmentMembers
+    departments:DB.departments,departmentMembers:DB.departmentMembers,
+    messages:DB.messages,taskAssignees:DB.taskAssignees  /* v32.2 修复 R2.2:补全两张新表 */
   }));}catch(e){}
 }
 function loadCache(){
@@ -1805,6 +1903,8 @@ function loadCache(){
     DB.taskProgress=d.taskProgress||[];
     DB.departments=d.departments||[];
     DB.departmentMembers=d.departmentMembers||[];
+    DB.messages=d.messages||[];                /* v32.2 */
+    DB.taskAssignees=d.taskAssignees||[];      /* v32.2 */
     return true;
   }catch(e){return false;}
 }
@@ -1920,6 +2020,741 @@ async function loadDepartmentMembers(){
   }
 }
 
+// v32:加载 task_assignees(多负责人映射)
+async function loadTaskAssignees(){
+  const {data, error} = await supa.from('task_assignees').select('*');
+  if(!error){
+    DB.taskAssignees = (data||[]).map(snakeToCamel);
+    saveCache();
+  }else{
+    console.warn('[loadTaskAssignees]', error);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// v31 — 消息系统(任务指派/催办/进度反馈/会议邀请)
+// ══════════════════════════════════════════════════════════
+async function loadMessages(){
+  // 只加载与我相关的(发的 + 收的)。admin 也只看自己相关,避免数据爆炸
+  if(!currentUser) return;
+  const {data, error} = await supa.from('messages')
+    .select('*')
+    .or(`to_user.eq.${currentUser.id},from_user.eq.${currentUser.id}`)
+    .order('created_at', {ascending: false})
+    .limit(500);
+  if(error){
+    console.warn('[loadMessages]', error);
+    return;
+  }
+  DB.messages = (data||[]).map(snakeToCamel);
+  saveCache();
+  // 更新顶栏未读红点
+  refreshUnreadBadge();
+}
+
+// 发送消息(异步,不阻塞调用方)
+async function sendMessage({toUser, type, title, content, relatedTaskId, relatedMeetingData}){
+  if(!currentUser){
+    console.warn('[sendMessage] 未登录,跳过');
+    return null;
+  }
+  if(!toUser){
+    console.warn('[sendMessage] 缺少 toUser');
+    return null;
+  }
+  // 接收方姓名(冗余)
+  const toProfile = DB.profiles.find(p=>p.id===toUser);
+  const row = {
+    from_user: currentUser.id,
+    from_name: currentUser.name || currentUser.email || '',
+    to_user: toUser,
+    to_name: toProfile?.name || '',
+    type,
+    title: title||'',
+    content: content||'',
+    related_task_id: relatedTaskId||null,
+    related_meeting_data: relatedMeetingData||null,
+  };
+  try{
+    const {data, error} = await supa.from('messages').insert(row).select();
+    if(error){
+      console.warn('[sendMessage]', error);
+      return null;
+    }
+    return data?.[0] || null;
+  }catch(e){
+    console.warn('[sendMessage] exception:', e);
+    return null;
+  }
+}
+
+// 标记单条已读
+async function markMessageRead(msgId){
+  if(!currentUser) return;
+  // 本地立即更新(乐观)
+  const m = DB.messages.find(x=>x.id===msgId);
+  if(m && !m.read){
+    m.read = true;
+    m.readAt = new Date().toISOString();
+  }
+  refreshUnreadBadge();
+  // 后台同步到 DB
+  try{
+    await supa.from('messages')
+      .update({read: true, read_at: new Date().toISOString()})
+      .eq('id', msgId);
+  }catch(e){
+    console.warn('[markMessageRead]', e);
+  }
+}
+
+// 批量标记当前所有未读已读
+async function markAllMessagesRead(){
+  if(!currentUser) return;
+  const unread = DB.messages.filter(m=>m.toUser===currentUser.id && !m.read);
+  if(unread.length===0){
+    toast('没有未读消息');
+    return;
+  }
+  // 本地立即更新
+  unread.forEach(m=>{ m.read=true; m.readAt=new Date().toISOString(); });
+  refreshUnreadBadge();
+  // 后台同步
+  for(const m of unread){
+    try{
+      await supa.from('messages')
+        .update({read: true, read_at: new Date().toISOString()})
+        .eq('id', m.id);
+    }catch(e){}
+  }
+  toast(`已标记 ${unread.length} 条消息为已读`);
+  if(curPage==='messages') renderPage('messages');
+}
+
+// 获取我的未读数(本地计算)
+function getUnreadCount(){
+  if(!currentUser) return 0;
+  return DB.messages.filter(m=>m.toUser===currentUser.id && !m.read).length;
+}
+
+// 未读分类计数(用于消息中心 tab)
+function getUnreadByType(){
+  if(!currentUser) return {};
+  const result = {task_assigned:0, task_remind:0, task_progress:0, task_accepted:0, meeting_invite:0, system:0, general:0};
+  DB.messages.forEach(m=>{
+    if(m.toUser===currentUser.id && !m.read){
+      result[m.type] = (result[m.type]||0) + 1;
+    }
+  });
+  return result;
+}
+
+// 刷新顶栏未读红点
+function refreshUnreadBadge(){
+  const el = document.getElementById('msg-badge');
+  const nav = document.getElementById('nav-msg-count');
+  const count = getUnreadCount();
+  if(el){
+    if(count > 0){
+      el.textContent = count > 99 ? '99+' : count;
+      el.style.display = 'inline-flex';
+    }else{
+      el.style.display = 'none';
+    }
+  }
+  if(nav){
+    if(count > 0){
+      nav.textContent = count > 99 ? '99+' : count;
+      nav.style.display = 'inline-flex';
+    }else{
+      nav.style.display = 'none';
+    }
+  }
+}
+
+// 我的未确认收到的任务(供登录后弹窗)
+function getMyPendingTasks(){
+  if(!currentUser) return [];
+  const uid = currentUser.id;
+  // 主负责人未确认
+  const asPrimary = DB.tasks.filter(t=>
+    t.assigneeId===uid &&
+    t.assignerId &&
+    t.assignerId !== uid &&
+    !t.acceptedAt &&
+    t.status!=='archived' &&
+    t.status!=='done'
+  );
+  // v32.1:协作者未确认
+  const myUnacceptedCollabIds = new Set(
+    (DB.taskAssignees||[])
+      .filter(a=>a.userId===uid && a.role!=='primary' && !a.acceptedAt)
+      .map(a=>a.taskId)
+  );
+  const asCollab = DB.tasks.filter(t=>
+    myUnacceptedCollabIds.has(t.id) &&
+    t.status!=='archived' &&
+    t.status!=='done' &&
+    !asPrimary.find(p=>p.id===t.id)  // 去重
+  );
+  return [...asPrimary, ...asCollab];
+}
+
+// 接收方"我已接收"操作 — v32.1 支持主负责人 + 协作者
+async function acceptTask(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+  const uid = currentUser?.id;
+
+  // 判断我是哪种角色(主负责人 / 协作者)
+  const isPrimary = t.assigneeId === uid;
+  const myCollabRec = (DB.taskAssignees||[]).find(a=>a.taskId===taskId && a.userId===uid && a.role!=='primary');
+  const isCollab = !!myCollabRec;
+
+  if(!isPrimary && !isCollab){
+    toast('你不是这个任务的负责人','err');
+    return;
+  }
+
+  // 检查是否已经确认过
+  if(isPrimary && t.acceptedAt){
+    toast('已经确认过了');
+    return;
+  }
+  if(isCollab && myCollabRec.acceptedAt){
+    toast('已经确认过了');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  let updateError = null;
+
+  if(isPrimary){
+    // 主负责人:更新 tasks 表
+    const {error, data} = await supa.from('tasks')
+      .update({accepted_at: now, accepted_by: uid})
+      .eq('id', taskId).select();
+    if(error || !data || data.length===0){
+      updateError = error?.message || '数据库未更新';
+    }
+  }else{
+    // 协作者:更新 task_assignees 表自己那条
+    const {error, data} = await supa.from('task_assignees')
+      .update({accepted_at: now, accepted_by: uid})
+      .eq('task_id', taskId).eq('user_id', uid).select();
+    if(error || !data || data.length===0){
+      updateError = error?.message || 'RLS 拒绝或记录不存在';
+    }
+  }
+
+  if(updateError){
+    toast('确认失败:'+updateError,'err');
+    return;
+  }
+
+  // 通知发起方
+  // - 主负责人接收 → 通知 assignerId(原指派方)
+  // - 协作者接收 → 通知 myCollabRec.addedBy(把他加进来的人,通常是创建人或改派人)
+  const notifyTo = isPrimary ? t.assignerId : myCollabRec.addedBy;
+  const myRole = isPrimary ? '主负责人' : '协作负责人(第二责任人)';
+
+  if(notifyTo && notifyTo !== uid){
+    sendMessage({
+      toUser: notifyTo,
+      type: 'task_accepted',
+      title: `${currentUser.name||'员工'} 已确认接收任务`,
+      content: `${currentUser.name||'员工'} 作为${myRole},已确认接收任务「${t.title||''}」,可以开始跟进进度了。`,
+      relatedTaskId: taskId,
+    });
+  }
+
+  toast('✓ 已确认接收');
+  await loadTasks();
+  await loadTaskAssignees();
+  // 刷新当前页(detail / list / messages)
+  if(curPage==='tasks' || curPage==='teamTasks' || curPage==='messages') renderPage(curPage);
+}
+
+// 指派方"催进度"操作(24h 冷却)
+async function remindTaskProgress(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+  if(t.assignerId !== currentUser?.id && !isAdmin()){
+    toast('只有指派方/管理员可以催进度','err');
+    return;
+  }
+  // 冷却检查
+  if(t.lastRemindAt){
+    const hours = (Date.now() - new Date(t.lastRemindAt).getTime()) / (1000*60*60);
+    if(hours < 24){
+      toast(`24 小时内只能催一次(上次催办 ${Math.round(hours)}h 前)`,'err');
+      return;
+    }
+  }
+  if(!t.assigneeId){
+    toast('该任务没有指派接收方','err');
+    return;
+  }
+  // 弹窗输入催办内容
+  const fnName = '_remindOk_'+gid();
+  window[fnName] = async (btn)=>{
+    const ta = document.getElementById('remind-msg');
+    const msg = ta?.value?.trim() || '请关注任务进展,如有阻碍请尽早告知。';
+    if(btn){btn.disabled=true; btn.textContent='发送中...';}
+    // 更新 last_remind_at
+    await supa.from('tasks').update({last_remind_at: new Date().toISOString()}).eq('id', taskId);
+    // 发消息
+    await sendMessage({
+      toUser: t.assigneeId,
+      type: 'task_remind',
+      title: `[催进度] ${t.title||''}`,
+      content: msg,
+      relatedTaskId: taskId,
+    });
+    delete window[fnName];
+    closeModal();
+    toast('✓ 催办消息已发送');
+    await loadTasks();
+  };
+  openRaw(`<div class="modal-hdr"><span class="modal-ttl">⏰ 催办任务进度</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+  <div class="modal-body">
+    <div style="margin-bottom:10px;color:var(--sl);font-size:13px">任务:<b>${h(t.title||'')}</b><br/>接收方:<b>${h(t.assigneeName||'')}</b></div>
+    <div class="fg full">
+      <label>催办留言</label>
+      <textarea id="remind-msg" rows="4" placeholder="请简要说明你希望了解什么进度...">本周可以同步一下进展吗?如有阻碍请尽早告知。</textarea>
+      <div style="font-size:11px;color:var(--ms);margin-top:5px">⚠ 24 小时内同一任务只能催办一次</div>
+    </div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn" onclick="closeModal()">取消</button>
+    <button class="btn btn-p" onclick="${fnName}(this)">发送催办</button>
+  </div>`, 540);
+}
+
+// v31:登录后展示待确认任务弹窗(每天一次)
+function showPendingTasksOnLogin(){
+  if(!currentUser) return;
+  const today = new Date().toISOString().slice(0,10);
+  const flagKey = `pending_shown_${currentUser.id}_${today}`;
+  if(sessionStorage.getItem(flagKey)) return; // 今天已弹过
+  const pending = getMyPendingTasks();
+  if(pending.length === 0) return;
+  sessionStorage.setItem(flagKey, '1');
+
+  // 取前 5 个
+  const top5 = pending.slice(0, 5);
+  const rest = pending.length - top5.length;
+
+  openRaw(`<div class="modal-hdr"><span class="modal-ttl">📬 你有 ${pending.length} 个新任务待确认</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+  <div class="modal-body">
+    <div style="padding:10px 12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af;margin-bottom:14px;line-height:1.6">
+      💡 这些任务已经指派给你,请尽快确认接收。点击「我已接收」让指派方知道你已经看到。
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${top5.map(t=>{
+        const pr = TSK_PRIORITY[t.priority]||TSK_PRIORITY.normal;
+        const dCls = dueClass(t);
+        return `<div style="padding:10px 12px;background:#fafbfc;border:1px solid var(--sv);border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;color:var(--ink);font-size:13px">${h(t.title||'')}</div>
+              <div style="font-size:11px;color:var(--ms);margin-top:3px">来自:${h(t.assignerName||'')} · 优先级:${pr.label}${t.dueDate?` · 截止:<span class="${dCls}">${dueLabel(t)}</span>`:''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-p btn-sm" onclick="closeModal();acceptTask('${t.id}')">✓ 我已接收</button>
+            <button class="btn btn-sm" onclick="closeModal();_jumpToTask('${t.id}')">查看详情</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${rest>0?`<div style="text-align:center;font-size:12px;color:var(--ms);margin-top:10px">还有 ${rest} 个待确认任务,可在「消息中心」查看</div>`:''}
+  </div>
+  <div class="modal-ft">
+    <button class="btn" onclick="closeModal()">稍后再说</button>
+    <button class="btn btn-p" onclick="closeModal();nav(document.querySelector('[data-page=messages]'),'messages')">进入消息中心</button>
+  </div>`, 600);
+}
+
+
+// ══════════════════════════════════════════════════════════
+// v32 — 任务改派功能(多负责人)
+// ══════════════════════════════════════════════════════════
+let _reassignSearch = '';
+
+function openReassignForm(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+  if(!canReassignTask(t)){toast('只有创建人/主负责人/管理员可以改派','err');return;}
+  _reassignSearch = '';
+  renderReassignForm(taskId);
+}
+
+function renderReassignForm(taskId, preservedChecked){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t) return;
+
+  // 候选人:所有活跃用户(除创建人 — 创建人始终是第一责任人,不在选择范围)
+  const candidates = DB.profiles.filter(p=>
+    p.isActive!==false && p.id !== t.createdBy
+  );
+  const currentAssignees = getTaskAssignees(taskId);
+
+  // 计算当前勾选(优先使用传入的 preservedChecked,否则用 DB 现状)
+  const currentIds = preservedChecked || new Set(currentAssignees.map(a=>a.userId));
+
+  const q = _reassignSearch.toLowerCase().trim();
+  const filtered = q
+    ? candidates.filter(p=>(p.name||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q))
+    : candidates;
+
+  const creator = DB.profiles.find(p=>p.id===t.createdBy);
+  const fnName = '_doReassign_'+gid();
+  window[fnName] = doReassign.bind(null, taskId, fnName);
+
+  // 列表 HTML
+  const listHtml = filtered.length===0
+    ? '<div style="padding:20px;text-align:center;color:var(--ms);font-size:13px">无匹配人员</div>'
+    : filtered.map(p=>{
+        const isChecked = currentIds.has(p.id);
+        const isPrimary = currentAssignees.find(a=>a.userId===p.id)?.role==='primary';
+        return `<label style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:${isPrimary?'not-allowed':'pointer'};font-size:13px;background:${isChecked?'#dcfce7':'transparent'};margin-bottom:2px">
+          <input type="checkbox" value="${p.id}" data-name="${h(p.name||'')}"
+            ${isChecked?'checked':''} ${isPrimary?'disabled':''}
+            class="reassign-cb" onchange="_updateReassignCount()">
+          <span style="flex:1">
+            <b>${h(p.name||p.email||'(未命名)')}</b>
+            ${p.email?`<span style="font-size:11px;color:var(--ms);margin-left:6px">${h(p.email)}</span>`:''}
+          </span>
+          ${isChecked?`<span class="bdg" style="background:${isPrimary?'#16a34a':'#3b82f6'};color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">${isPrimary?'主负责人':'已添加'}</span>`:''}
+        </label>`;
+      }).join('');
+
+  const html = `<div class="modal-hdr"><span class="modal-ttl">🔄 改派任务(可多选)</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+  <div class="modal-body">
+    <div style="padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:12px;color:#166534;margin-bottom:12px;line-height:1.6">
+      💡 <b>任务:</b>${h(t.title||'')}<br/>
+      <b>第一责任人(创建人,始终保留):</b>${h(creator?.name||t.createdByName||'(未知)')}<br/>
+      勾选下方人员添加为<b>第二责任人(协作者)</b>。任务会同时显示在他们的「我的任务」列表中。
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <input id="reassign-search" placeholder="🔍 搜索姓名或邮箱..." value="${h(_reassignSearch)}"
+        oninput="_reassignSearch=this.value;_redrawReassignList('${taskId}')" autocomplete="off">
+    </div>
+    <div id="reassign-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--sv);border-radius:8px;background:#fafbfc;padding:6px">
+      ${listHtml}
+    </div>
+    <div style="font-size:11px;color:var(--ms);margin-top:8px">共 ${candidates.length} 人可选(已过滤创建人)· 已勾选 <b id="reassign-count">${currentIds.size}</b> 人</div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn" onclick="closeModal()">取消</button>
+    <button class="btn btn-p" onclick="${fnName}(this)">💾 保存改派</button>
+  </div>`;
+
+  const existing = document.getElementById('modal-ov');
+  if(existing){
+    existing.querySelector('.modal').innerHTML = html;
+  }else{
+    openRaw(html, 640);
+  }
+}
+
+function _updateReassignCount(){
+  const cnt = document.querySelectorAll('.reassign-cb:checked').length;
+  const el = document.getElementById('reassign-count');
+  if(el) el.textContent = cnt;
+}
+
+// 搜索时局部重绘:保留已勾选状态
+function _redrawReassignList(taskId){
+  const checkedNow = new Set();
+  document.querySelectorAll('.reassign-cb:checked').forEach(cb=>checkedNow.add(cb.value));
+  renderReassignForm(taskId, checkedNow);
+  // 恢复焦点
+  const inp = document.getElementById('reassign-search');
+  if(inp){
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+  }
+}
+
+async function doReassign(taskId, fnName, btn){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+
+  // 收集勾选的人(包含 disabled 主负责人也算选中)
+  const checked = Array.from(document.querySelectorAll('.reassign-cb:checked')).map(cb=>({
+    id: cb.value,
+    name: cb.dataset.name||'',
+  }));
+
+  if(btn){btn.disabled=true; btn.textContent='保存中...';}
+
+  // 比对差异
+  const existing = getTaskAssignees(taskId);
+  const existingIds = new Set(existing.map(a=>a.userId));
+  const newIds = new Set(checked.map(c=>c.id));
+
+  const toAdd = checked.filter(c=>!existingIds.has(c.id));
+  const toDelete = existing.filter(a=>!newIds.has(a.userId) && a.role!=='primary');
+
+  let addedCount=0, deletedCount=0, notifiedCount=0;
+
+  for(const c of toAdd){
+    try{
+      const {error} = await supa.from('task_assignees').insert({
+        task_id: taskId,
+        user_id: c.id,
+        user_name: c.name,
+        role: 'collaborator',
+        added_by: currentUser?.id,
+      });
+      if(!error){
+        addedCount++;
+        await sendMessage({
+          toUser: c.id,
+          type: 'task_assigned',
+          title: `[任务协作] ${t.title||''}`,
+          content: `${currentUser?.name||'某人'} 把你添加为任务「${t.title||''}」的协作负责人(第二责任人)。\n创建人(第一责任人):${h(t.createdByName||'(未知)')}\n请查看任务详情。`,
+          relatedTaskId: taskId,
+        });
+        notifiedCount++;
+      }else{
+        console.warn('[doReassign] insert error:', error);
+      }
+    }catch(e){console.warn(e);}
+  }
+
+  for(const a of toDelete){
+    try{
+      await supa.from('task_assignees').delete()
+        .eq('task_id', taskId).eq('user_id', a.userId);
+      deletedCount++;
+    }catch(e){console.warn(e);}
+  }
+
+  delete window[fnName];
+  closeModal();
+
+  if(addedCount===0 && deletedCount===0){
+    toast('未做任何改动');
+  }else{
+    const parts = [];
+    if(addedCount>0) parts.push(`新增 ${addedCount} 位协作者`);
+    if(deletedCount>0) parts.push(`移除 ${deletedCount} 位`);
+    if(notifiedCount>0) parts.push(`已通知 ${notifiedCount} 人`);
+    toast('✓ '+parts.join(' · '));
+  }
+  await loadTaskAssignees();
+  await loadTasks();
+  if(curPage==='tasks'||curPage==='teamTasks') renderPage(curPage);
+}
+
+
+function openMeetingForm(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+
+  // 默认参会人:assignee + assigner(可勾选添加其他成员)
+  const defaultParticipants = new Set();
+  if(t.assigneeId) defaultParticipants.add(t.assigneeId);
+  if(t.assignerId) defaultParticipants.add(t.assignerId);
+  if(t.createdBy) defaultParticipants.add(t.createdBy);
+
+  // 候选参会人:优先同部门成员 + 任务关联角色
+  let candidates = [];
+  if(t.departmentId){
+    const memberIds = DB.departmentMembers
+      .filter(m=>m.departmentId===t.departmentId)
+      .map(m=>m.userId);
+    candidates = DB.profiles.filter(p=>memberIds.includes(p.id) && p.isActive!==false);
+  }else{
+    candidates = DB.profiles.filter(p=>p.isActive!==false);
+  }
+  // 把任务关联人也加进来(如果不在部门列表中)
+  [t.assigneeId, t.assignerId, t.createdBy].forEach(uid=>{
+    if(uid && !candidates.find(c=>c.id===uid)){
+      const p = DB.profiles.find(x=>x.id===uid);
+      if(p) candidates.unshift(p);
+    }
+  });
+
+  // 默认时间:明天 10:00 - 11:00
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate()+1);
+  tomorrow.setHours(10,0,0,0);
+  const endTime = new Date(tomorrow);
+  endTime.setHours(11,0,0,0);
+  const fmtDt = d => {
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const fnName = '_saveMeeting_'+gid();
+  window[fnName] = saveMeeting.bind(null, taskId, fnName);
+
+  openRaw(`<div class="modal-hdr"><span class="modal-ttl">📅 创建会议邀请</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+  <div class="modal-body">
+    <div style="padding:10px 12px;background:#f5f3ff;border-radius:8px;font-size:12px;color:#5b21b6;margin-bottom:14px;line-height:1.6">
+      💡 关联任务:<b>${h(t.title||'')}</b><br/>
+      会议确认后,所有参会人会在「消息中心」收到通知,并可下载 .ics 文件加入本地日历(Outlook / Google / Apple 日历都支持)。
+    </div>
+    <div class="form-grid">
+      <div class="fg full">
+        <label>会议主题<span class="req">*</span></label>
+        <input id="mt-title" value="${h('讨论:'+(t.title||''))}" placeholder="如:周三例会 / 项目进度同步">
+      </div>
+      <div class="fg">
+        <label>开始时间<span class="req">*</span></label>
+        <input type="datetime-local" id="mt-start" value="${fmtDt(tomorrow)}">
+      </div>
+      <div class="fg">
+        <label>结束时间<span class="req">*</span></label>
+        <input type="datetime-local" id="mt-end" value="${fmtDt(endTime)}">
+      </div>
+      <div class="fg full">
+        <label>地点</label>
+        <input id="mt-location" value="线上会议(腾讯会议)" placeholder="如:公司 3 楼会议室 / 腾讯会议 ID 123-456">
+      </div>
+      <div class="fg full">
+        <label>参会人<span class="req">*</span> <span style="font-size:11px;color:var(--ms);font-weight:400">(默认勾选指派双方,可加选)</span></label>
+        <div id="mt-participants" style="max-height:160px;overflow-y:auto;border:1px solid var(--sv);border-radius:8px;padding:8px;background:#fafbfc">
+          ${candidates.map(p=>{
+            const isDefault = defaultParticipants.has(p.id);
+            return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:13px">
+              <input type="checkbox" value="${p.id}" data-name="${h(p.name||'')}" ${isDefault?'checked':''}>
+              <span>${h(p.name||p.email||'(未命名)')}${p.id===currentUser?.id?' <span style="color:var(--ms);font-size:11px">(我)</span>':''}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="fg full">
+        <label>议题/备注</label>
+        <textarea id="mt-notes" rows="3" placeholder="本次会议希望讨论什么...">同步任务进展、对齐下一步行动项</textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn" onclick="closeModal()">取消</button>
+    <button class="btn btn-p" onclick="${fnName}(this)">📅 创建并通知参会人</button>
+  </div>`, 640);
+}
+
+// 生成 ICS 文件内容(RFC 5545 简化版)
+function generateIcs({title, startTime, endTime, location, description, organizer, attendees}){
+  const fmtIcsDate = isoStr => {
+    // ISO "2026-05-26T10:00" → "20260526T100000"
+    return isoStr.replace(/[-:]/g,'').replace(/\.\d+/,'').slice(0,15) + (isoStr.endsWith('Z')?'Z':'');
+  };
+  const uid = `meeting-${gid()}@foodvio.crm`;
+  const now = new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z';
+  // 处理本地时间(无 Z)→ 用 floating time
+  const dtStart = fmtIcsDate(startTime);
+  const dtEnd = fmtIcsDate(endTime);
+
+  const escape = s => (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Foodvio CRM//Meeting Invite//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${escape(title)}`,
+    `LOCATION:${escape(location)}`,
+    `DESCRIPTION:${escape(description)}`,
+    organizer ? `ORGANIZER;CN=${escape(organizer.name)}:mailto:${escape(organizer.email||'noreply@foodvio.com.cn')}` : '',
+    ...(attendees||[]).map(a=>`ATTENDEE;CN=${escape(a.name)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${escape(a.email||'noreply@foodvio.com.cn')}`),
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Reminder',
+    'TRIGGER:-PT15M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean);
+  return lines.join('\r\n');
+}
+
+async function saveMeeting(taskId, fnName, btn){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+
+  const title    = document.getElementById('mt-title')?.value?.trim()||'';
+  const startTime= document.getElementById('mt-start')?.value||'';
+  const endTime  = document.getElementById('mt-end')?.value||'';
+  const location = document.getElementById('mt-location')?.value?.trim()||'线上';
+  const notes    = document.getElementById('mt-notes')?.value?.trim()||'';
+  const checkedBoxes = document.querySelectorAll('#mt-participants input[type=checkbox]:checked');
+  const participants = Array.from(checkedBoxes).map(cb=>({
+    id: cb.value,
+    name: cb.dataset.name||'',
+  }));
+
+  if(!title){toast('请填写会议主题','err');return;}
+  if(!startTime){toast('请填写开始时间','err');return;}
+  if(!endTime){toast('请填写结束时间','err');return;}
+  if(new Date(endTime)<=new Date(startTime)){toast('结束时间必须晚于开始时间','err');return;}
+  if(participants.length===0){toast('请至少选择 1 个参会人','err');return;}
+
+  if(btn){btn.disabled=true; btn.textContent='创建中...';}
+
+  // 填充每个 participant 的 email
+  participants.forEach(p=>{
+    const prof = DB.profiles.find(x=>x.id===p.id);
+    p.email = prof?.email||'';
+  });
+
+  // 生成 ICS
+  const participantNames = participants.map(p=>p.name).join('、');
+  const description = `任务:${t.title||''}\n议题:${notes}\n参会:${participantNames}`;
+  const icsData = generateIcs({
+    title, startTime, endTime, location, description,
+    organizer: {name: currentUser?.name||'', email: currentUser?.email||''},
+    attendees: participants,
+  });
+
+  // 给每个参会人发消息(不含自己)
+  const meetingData = {
+    title, startTime, endTime, location, notes,
+    participants: participantNames,
+    organizer: currentUser?.name||'',
+    icsData,
+  };
+
+  let sentCount = 0;
+  for(const p of participants){
+    if(p.id === currentUser?.id) continue; // 不给自己发
+    const ok = await sendMessage({
+      toUser: p.id,
+      type: 'meeting_invite',
+      title: `[会议邀请] ${title}`,
+      content: `${currentUser?.name||'某人'} 邀请你参加会议:\n时间:${startTime.replace('T',' ')} ~ ${endTime.replace('T',' ')}\n地点:${location}\n议题:${notes||'(无)'}\n请点击下方按钮下载 .ics 加入你的本地日历。`,
+      relatedTaskId: taskId,
+      relatedMeetingData: meetingData,
+    });
+    if(ok) sentCount++;
+  }
+
+  // 给自己也下载一份 ICS
+  const blob = new Blob([icsData], {type:'text/calendar'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `meeting_${gid()}.ics`;
+  link.click();
+
+  delete window[fnName];
+  closeModal();
+  toast(`✓ 会议已创建,已通知 ${sentCount} 位参会人,.ics 文件已下载`);
+}
+
+
 // 离线降级加载（带 sessionStorage 缓存回退）
 async function loadWithFallback(table,key){
   try{
@@ -1987,6 +2822,10 @@ async function loadAllData(){
 
   // v30:加载共享 AI 配置(失败不影响主流程)
   await loadSharedAIConfig();
+  // v31:加载消息(失败不影响主流程)
+  await loadMessages();
+  // v32:加载任务多负责人映射
+  await loadTaskAssignees();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2064,6 +2903,9 @@ async function doLogin(){
     toast('欢迎回来，'+(currentUser.name||input)+'！');
     btn.disabled=false;btn.textContent='登 录';
     subscribeRealtime();
+
+    // v31:登录后检查未接收任务,有则弹提示(每天一次)
+    setTimeout(()=>showPendingTasksOnLogin(), 800);
 
   }catch(e){
     btn.disabled=false;btn.textContent='登 录';
@@ -2250,6 +3092,12 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'department_members'},
       ()=>loadDepartmentMembers()
     )
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},
+      ()=>loadMessages()
+    )
+    .on('postgres_changes',{event:'*',schema:'public',table:'task_assignees'},
+      ()=>loadTaskAssignees()
+    )
     .subscribe();
 }
 function unsubscribeRealtime(){
@@ -2321,7 +3169,7 @@ function closeDropdown(){document.getElementById('user-dropdown').classList.add(
 document.addEventListener('click',()=>closeDropdown());
 
 let curPage='dashboard';
-const PAGE_META={dashboard:{icon:'📊',title:'仪表盘'},customers:{icon:'👥',title:'客户列表'},followups:{icon:'📝',title:'跟进记录'},tasks:{icon:'📋',title:'我的任务'},teamTasks:{icon:'👥',title:'团队任务'},taskFollow:{icon:'📝',title:'任务跟进'},archive:{icon:'📦',title:'归档库'},report:{icon:'📈',title:'周报管理'},users:{icon:'⚙️',title:'用户管理'},ai:{icon:'🤖',title:'AI设置'}};
+const PAGE_META={dashboard:{icon:'📊',title:'仪表盘'},messages:{icon:'💬',title:'消息中心'},customers:{icon:'👥',title:'客户列表'},followups:{icon:'📝',title:'跟进记录'},tasks:{icon:'📋',title:'我的任务'},teamTasks:{icon:'👥',title:'团队任务'},taskFollow:{icon:'📝',title:'任务跟进'},archive:{icon:'📦',title:'归档库'},report:{icon:'📈',title:'周报管理'},users:{icon:'⚙️',title:'用户管理'},ai:{icon:'🤖',title:'AI设置'}};
 function weekRange(){
   const n=new Date(),day=n.getDay()||7,m=new Date(n);m.setDate(n.getDate()-day+1);
   const s=new Date(m);s.setDate(m.getDate()+6);
@@ -2377,7 +3225,7 @@ function tlCard(f,showCo,showActions){
   }
   const canEdit=isAdmin()||(currentUser&&f.createdBy===currentUser.id);
   // 构建分享文本
-  const shareText=`【花花食界CRM跟进记录】\n客户：${c?.companyName||'—'}\n日期：${fd(f.createdAt)}\n方式：${f.type}\n内容：${f.content}${f.demand?'\n需求：'+f.demand:''}${f.outcome?'\n成果：'+f.outcome:''}${f.nextAction?'\n下一步：'+f.nextAction:''}`;
+  const shareText=`【花花食界 跟进记录】\n客户：${c?.companyName||'—'}\n日期：${fd(f.createdAt)}\n方式：${f.type}\n内容：${f.content}${f.demand?'\n需求：'+f.demand:''}${f.outcome?'\n成果：'+f.outcome:''}${f.nextAction?'\n下一步：'+f.nextAction:''}`;
   return `<div class="tl-item">
   <div class="tl-dot" style="background:${T_DOT[f.type]||'#6b7280'}">${T_ICO[f.type]||'·'}</div>
   <div class="tl-card">
@@ -2400,7 +3248,7 @@ function tlCard(f,showCo,showActions){
     ${(f.nextAction||f.nextFollowUpDate)?`<div class="tl-next">
       ${f.nextAction?`<div class="tl-ni"><span class="tl-nl">下一步</span><span class="tl-nv">${h(f.nextAction)}</span></div>`:''}
       ${f.nextFollowUpDate?`<div class="tl-ni"><span class="tl-nl">计划日期</span><span class="tl-nv">${daysTxt}${fd(f.nextFollowUpDate)}</span>
-        <button class="tool-btn" style="margin-left:6px" onclick="addToCalendar({title:'[花花食界CRM] 跟进 ${h(c?.companyName||'')}',date:'${f.nextFollowUpDate}',description:'${(f.nextAction||'').replace(/'/g,"\\'")}',location:'${(c?.address||c?.city||'').replace(/'/g,"\\'")}'})" title="加入系统日历">📅</button>
+        <button class="tool-btn" style="margin-left:6px" onclick="addToCalendar({title:'[花花食界] 跟进 ${h(c?.companyName||'')}',date:'${f.nextFollowUpDate}',description:'${(f.nextAction||'').replace(/'/g,"\\'")}',location:'${(c?.address||c?.city||'').replace(/'/g,"\\'")}'})" title="加入系统日历">📅</button>
       </div>`:''}
     </div>`:''}
   </div>
@@ -2468,7 +3316,7 @@ function renderDash(){
   <div class="welcome">
     <div class="wc-text">
       <h2>${gr}，${h(currentUser?.name||'用户')}！今天 ${today()} 星期${wkd}</h2>
-      <p>花花食界 CRM · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 · ${myT.length} 个任务 🌿</p>
+      <p>花花食界客户与任务管理系统 · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 · ${myT.length} 个任务 🌿</p>
     </div>
     <div class="wc-ico">🌿</div>
   </div>
@@ -2811,7 +3659,14 @@ function renderTaskListView(filtered, source, mode){
         return `<div class="tbl-row ${colsClass} ${checked?'row-checked':''}" onclick="${showBulk?`toggleTaskSelection('${t.id}')`:`openTaskDetail('${t.id}')`}">
           ${chkCell}
           <div>
-            <div class="co-n">${h(t.title)}</div>
+            <div class="co-n">${(()=>{
+              const uid = currentUser?.id;
+              const isPrimaryUnaccepted = t.assigneeId===uid && t.assignerId && t.assignerId!==uid && !t.acceptedAt;
+              const myCollab = (DB.taskAssignees||[]).find(a=>a.taskId===t.id && a.userId===uid && a.role!=='primary');
+              const isCollabUnaccepted = myCollab && !myCollab.acceptedAt;
+              const shouldDot = (isPrimaryUnaccepted || isCollabUnaccepted) && t.status!=='done' && t.status!=='archived';
+              return shouldDot ? '<span title="未确认接收" style="display:inline-block;width:7px;height:7px;background:#dc2626;border-radius:50%;margin-right:5px;vertical-align:middle"></span>' : '';
+            })()}${h(t.title)}</div>
             <div class="co-i">${h(t.description||'').slice(0,60)}${(t.description||'').length>60?'…':''}</div>
           </div>
           <span style="font-size:12px;color:var(--sl)">${h(t.category||'其他')}</span>
@@ -2821,7 +3676,7 @@ function renderTaskListView(filtered, source, mode){
             <div class="prog-bar"><div class="prog-fill ${t.status==='slow'?'slow':''}" style="width:${t.progress||0}%"></div></div>
             <div class="prog-num">${t.progress||0}%</div>
           </div>
-          <span style="font-size:12px;color:var(--sl);font-weight:500">${h(t.assigneeName||getUserName(t.assigneeId))}</span>
+          <span style="font-size:12px;color:var(--sl);font-weight:500">${h(t.assigneeName||getUserName(t.assigneeId))}${(()=>{const cnt=getTaskAssignees(t.id).filter(a=>a.role!=='primary'&&a.userId!==t.createdBy).length;return cnt>0?`<span class="bdg" style="background:#dbeafe;color:#1e40af;font-size:10px;margin-left:4px;padding:1px 5px;border-radius:8px">+${cnt}</span>`:'';})()}</span>
           <span class="${dCls}" style="font-size:11px">${dueLabel(t)}</span>
           <div class="acts" onclick="event.stopPropagation()">${acts}</div>
         </div>`;
@@ -3031,7 +3886,10 @@ function bulkChangeAssignee(){
       <div class="fg full">
         <label>新负责人<span class="req">*</span></label>
         <select id="bulk-assignee">${options}</select>
-        <div style="font-size:11px;color:var(--ms);margin-top:4px">⚠️ 改派后,原负责人将失去任务可见权限</div>
+        <div style="margin-top:8px;padding:9px 11px;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;font-size:12px;color:#166534;line-height:1.7">
+          💡 <b>原负责人将作为「协作负责人(第二责任人)」保留</b>,继续能看到任务并参与协作,只是不再是主负责人。<br>
+          创建人(第一责任人)始终不变。
+        </div>
       </div>
     </div>`,
     `<button class="btn" onclick="closeModal()">取消</button>
@@ -3045,17 +3903,21 @@ async function applyBulkChangeAssignee(){
   const ids = [...selectedTaskIds];
   const btn = document.querySelector('.modal-ft .btn-p');
   if(btn){btn.disabled=true;btn.textContent='处理中...';}
-  let ok=0, fail=0, autoJoinedDepts=new Set();
+  let ok=0, fail=0, keptCollab=0, autoJoinedDepts=new Set();
   for(const id of ids){
     const t = DB.tasks.find(x=>x.id===id);
     if(!t||!canEditTask(t)){fail++;continue;}
 
+    const oldAssigneeId = t.assigneeId;
+    const oldAssigneeName = t.assigneeName || getUserName(oldAssigneeId) || '—';
+
+    // 跳过原本就是这个负责人的
+    if(oldAssigneeId === newAssigneeId){fail++;continue;}
+
     // B3 修复:若任务有 department,确保新负责人在该 department 里
-    // 否则改派后由于 RLS,新负责人将看不到这个任务
     if(t.departmentId){
       const isMember = DB.departmentMembers.some(m=>m.departmentId===t.departmentId && m.userId===newAssigneeId);
       if(!isMember){
-        // 自动把新负责人加入该部门(作为普通成员)
         const {error:mErr} = await supa.from('department_members').upsert({
           department_id: t.departmentId,
           user_id:       newAssigneeId,
@@ -3065,30 +3927,86 @@ async function applyBulkChangeAssignee(){
       }
     }
 
+    // 1. 更新 tasks 表的 assignee_id 为新负责人
     const {error}=await supa.from('tasks').update({
       assignee_id: newAssigneeId,
       assignee_name: newAssignee.name||'',
+      accepted_at: null,        // 新主负责人需要重新确认
+      accepted_by: null,
       updated_at:new Date().toISOString(),
     }).eq('id',id);
     if(error){fail++;continue;}
-    // 写系统进展
+
+    // 2. v32.4 修复:同步维护 task_assignees
+    //    - 删除旧 primary 记录(老 assigneeId 的 primary 行)
+    //    - 把旧负责人保留为 collaborator(第二责任人)
+    //    - 给新负责人插入 primary 记录
+    if(oldAssigneeId){
+      try{
+        // 删除旧 primary 记录(可能存在,可能不存在 — 兼容历史数据)
+        await supa.from('task_assignees').delete()
+          .eq('task_id', id).eq('user_id', oldAssigneeId).eq('role', 'primary');
+        // 如果旧负责人不是创建人,把他作为协作者保留
+        if(oldAssigneeId !== t.createdBy && oldAssigneeId !== newAssigneeId){
+          // 先 delete 避免冲突,再 insert
+          await supa.from('task_assignees').delete()
+            .eq('task_id', id).eq('user_id', oldAssigneeId);
+          await supa.from('task_assignees').insert({
+            task_id: id,
+            user_id: oldAssigneeId,
+            user_name: oldAssigneeName,
+            role: 'collaborator',
+            added_by: currentUser?.id || null,
+          });
+          keptCollab++;
+        }
+      }catch(e){console.warn('[bulk reassign] 旧 primary 处理失败:', e);}
+    }
+    // 插入新 primary
+    try{
+      await supa.from('task_assignees').delete()
+        .eq('task_id', id).eq('user_id', newAssigneeId);
+      await supa.from('task_assignees').insert({
+        task_id: id,
+        user_id: newAssigneeId,
+        user_name: newAssignee.name||'',
+        role: 'primary',
+        added_by: currentUser?.id || null,
+      });
+    }catch(e){console.warn('[bulk reassign] 新 primary 插入失败:', e);}
+
+    // 3. 写系统进展
     await supa.from('task_progress').insert(progressToRow({
       taskId: id,
-      content: `负责人改派:${t.assigneeName||getUserName(t.assigneeId)||'—'} → ${newAssignee.name}`,
+      content: `负责人改派:${oldAssigneeName} → ${newAssignee.name}(原负责人保留为协作)`,
       progressBefore: t.progress||0,
       progressAfter:  t.progress||0,
     }));
+
+    // 4. 通知新负责人
+    sendMessage({
+      toUser: newAssigneeId,
+      type: 'task_assigned',
+      title: `[任务改派] ${t.title||''}`,
+      content: `${currentUser?.name||'某人'} 把任务「${t.title||''}」改派给你作为主负责人。\n原负责人 ${oldAssigneeName} 仍作为协作者保留。\n请确认接收。`,
+      relatedTaskId: id,
+    });
+
     ok++;
   }
   closeModal();
   clearTaskSelection();
-  let msg = `改派完成:成功 ${ok} 个${fail?`,失败 ${fail} 个`:''}`;
+  const parts = [`成功 ${ok} 个`];
+  if(fail) parts.push(`失败 ${fail} 个`);
+  if(keptCollab) parts.push(`${keptCollab} 位原负责人保留为协作`);
+  let msg = '改派完成:' + parts.join(' · ');
   if(autoJoinedDepts.size>0){
     msg += `\n已自动将 ${newAssignee.name} 加入 ${autoJoinedDepts.size} 个部门`;
   }
   toast(msg);
   await loadTasks();
   await loadTaskProgress();
+  await loadTaskAssignees();  // v32.4
   if(autoJoinedDepts.size>0) await loadDepartmentMembers();
 }
 
@@ -3798,6 +4716,43 @@ async function saveTaskToDB(obj, existing){
     : await supa.from('tasks').insert({...row, created_at: new Date().toISOString()});
   if(error){toast('保存失败:'+error.message,'err');return;}
 
+  // v32.3 修复 Z1.1:同步 task_assignees 表的主负责人
+  // 场景:① 新建任务并指派给某人 ② 编辑任务改变了主负责人
+  if(obj.assigneeId){
+    const oldAssigneeId = existing?.assigneeId;
+    const assigneeChangedHere = oldAssigneeId !== obj.assigneeId;
+    if(!isUpdate || assigneeChangedHere){
+      // 改派时:先把旧的主负责人记录降级或删除(若旧人也不在新指派中)
+      if(isUpdate && oldAssigneeId && oldAssigneeId !== obj.assigneeId){
+        // 旧主负责人:从 task_assignees 中删除 primary 角色记录
+        try{
+          await supa.from('task_assignees')
+            .delete()
+            .eq('task_id', obj.id)
+            .eq('user_id', oldAssigneeId)
+            .eq('role', 'primary');
+        }catch(e){console.warn('[saveTaskToDB] 删除旧 primary 失败:', e);}
+      }
+      // 新主负责人:upsert
+      try{
+        // 先尝试删除该 user 已有任何角色的记录(避免冲突)
+        await supa.from('task_assignees')
+          .delete()
+          .eq('task_id', obj.id)
+          .eq('user_id', obj.assigneeId);
+      }catch(e){}
+      try{
+        await supa.from('task_assignees').insert({
+          task_id: obj.id,
+          user_id: obj.assigneeId,
+          user_name: obj.assigneeName || getUserName(obj.assigneeId) || '',
+          role: 'primary',
+          added_by: currentUser?.id || null,
+        });
+      }catch(e){console.warn('[saveTaskToDB] 插入 primary 失败:', e);}
+    }
+  }
+
   // 若状态发生变化,自动写一条进展记录(系统记录)
   if(existing && existing.status!==obj.status){
     await supa.from('task_progress').insert(progressToRow({
@@ -3809,8 +4764,29 @@ async function saveTaskToDB(obj, existing){
       blockers: obj.status==='slow' ? (obj.blockerReason||'') : '',
     }));
   }
+
+  // v31:任务指派触发消息
+  // 触发条件:① 新建任务且指派给他人;② 改派任务给新的人(assigneeId 变了)
+  const assigneeChanged = existing && existing.assigneeId !== obj.assigneeId;
+  const isNewAssignment = !existing && obj.assigneeId && obj.assigneeId !== currentUser?.id;
+  if(obj.assigneeId && (isNewAssignment || (assigneeChanged && obj.assigneeId !== currentUser?.id))){
+    // 通知接收方
+    sendMessage({
+      toUser: obj.assigneeId,
+      type: 'task_assigned',
+      title: `${isNewAssignment ? '新任务指派' : '任务改派'}:${obj.title||''}`,
+      content: `${currentUser?.name||'某人'} 把任务「${obj.title||''}」指派给你。\n${obj.description?'描述:'+obj.description.slice(0,150):''}\n${obj.deadline?'截止日期:'+obj.deadline:''}\n${obj.priority?'优先级:'+obj.priority:''}\n请确认接收并尽快开始。`,
+      relatedTaskId: obj.id,
+    });
+    // 若是改派,新接收方需要重新确认 → 清空 accepted_at
+    if(assigneeChanged){
+      await supa.from('tasks').update({accepted_at: null, accepted_by: null}).eq('id', obj.id);
+    }
+  }
+
   await loadTasks();
   await loadDepartmentMembers();
+  await loadTaskAssignees();  // v32.3:同步刷新协作者表
 }
 
 async function deleteTaskFromDB(id){
@@ -3889,6 +4865,67 @@ function openTaskDetail(id){
     ? `<div style="border:2px dashed var(--sv);border-radius:8px;padding:24px;text-align:center;color:var(--ms)"><div style="font-size:28px;margin-bottom:8px">📭</div>暂无进展记录</div>`
     : `<div class="tsk-timeline">${progressList.map(p=>renderProgressTimelineItem(p,t,cd)).join('')}</div>`;
 
+  // v31:协作动作按钮  v32.1:支持协作者接收
+  const isAssignee = t.assigneeId === currentUser?.id;
+  const isAssigner = t.assignerId === currentUser?.id;
+  // v32.1:我作为协作者的记录(role!=='primary')
+  const myCollabRec = (DB.taskAssignees||[]).find(a=>
+    a.taskId===t.id && a.userId===currentUser?.id && a.role!=='primary'
+  );
+  const isCollab = !!myCollabRec;
+
+  const collabBtns = [];
+  // 主负责人:未确认的话显示"我已接收"
+  if(isAssignee && t.assignerId && t.assignerId !== currentUser?.id && !t.acceptedAt && t.status!=='archived' && t.status!=='done'){
+    collabBtns.push(`<button class="btn btn-p btn-sm" onclick="acceptTask('${t.id}')">✓ 我已接收</button>`);
+  }
+  // 主负责人:已接收徽章
+  if(isAssignee && t.acceptedAt){
+    collabBtns.push(`<span class="bdg" style="background:#dcfce7;color:#166534;font-size:11px">✓ 已于 ${fd(t.acceptedAt)} 接收</span>`);
+  }
+  // v32.1:协作者也需要"我已接收"按钮
+  if(isCollab && !myCollabRec.acceptedAt && t.status!=='archived' && t.status!=='done'){
+    collabBtns.push(`<button class="btn btn-p btn-sm" onclick="acceptTask('${t.id}')">✓ 我已接收(协作)</button>`);
+  }
+  // v32.1:协作者已接收徽章
+  if(isCollab && myCollabRec.acceptedAt){
+    collabBtns.push(`<span class="bdg" style="background:#dbeafe;color:#1e40af;font-size:11px">✓ 协作者已于 ${fd(myCollabRec.acceptedAt)} 接收</span>`);
+  }
+  // 指派方:催进度按钮
+  if((isAssigner || isAdmin()) && t.assigneeId && t.assigneeId !== currentUser?.id && t.status!=='done' && t.status!=='archived'){
+    collabBtns.push(`<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border-color:#f59e0b" onclick="remindTaskProgress('${t.id}')">⏰ 催进度</button>`);
+  }
+  // v32:改派任务按钮(创建人/主负责人/admin 可见)
+  if(canReassignTask(t) && t.status!=='archived'){
+    collabBtns.push(`<button class="btn btn-sm" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9" onclick="openReassignForm('${t.id}')">🔄 改派任务</button>`);
+  }
+  // 任意参与方:创建会议
+  if(isTaskParticipant(t) && t.status!=='archived'){
+    collabBtns.push(`<button class="btn btn-sm" style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="openMeetingForm('${t.id}')">📅 创建会议</button>`);
+  }
+  const collabHtml = collabBtns.length>0 ? `<div class="tsk-collab-bar">${collabBtns.join(' ')}</div>` : '';
+
+  // v32:多负责人展示 — v32.1 升级:显示每个协作者的接收状态
+  const allAssignees = getTaskAssignees(t.id);
+  const collaborators = allAssignees.filter(a=>a.role!=='primary' && a.userId !== t.createdBy);
+  const collabBadgesHtml = collaborators.length>0 ? `
+    <div class="tsk-det-section">
+      <h4>👥 协作负责人(第二责任人) · ${collaborators.length} 人</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${collaborators.map(a=>{
+          const profile = DB.profiles.find(p=>p.id===a.userId);
+          const name = h(profile?.name||a.userName||'(未知)');
+          const accepted = a.acceptedAt;
+          return `<span class="bdg" style="background:${accepted?'#dcfce7':'#fef3c7'};color:${accepted?'#166534':'#92400e'};padding:5px 10px;font-size:12px;display:inline-flex;align-items:center;gap:5px">
+            ${name}
+            ${accepted
+              ? `<span title="已确认接收于 ${fd(accepted)}" style="font-size:10px;color:#166534;font-weight:600">✓ 已接收</span>`
+              : `<span title="尚未确认接收" style="font-size:10px;color:#dc2626;font-weight:600">● 未接收</span>`}
+          </span>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   const body = `<div class="tsk-det-hdr ${hdrCls}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:0">
@@ -3908,6 +4945,7 @@ function openTaskDetail(id){
     </div>
   </div>
   <div class="tsk-det-body">
+    ${collabHtml}
     ${quickActs}
 
     ${t.status==='slow' && t.blockerReason?`<div class="tsk-blocker-inline"><strong>⚠ 缓慢/超前说明:</strong> ${h(t.blockerReason)}</div>`:''}
@@ -3926,6 +4964,8 @@ function openTaskDetail(id){
       <div class="info-grid">${infoFields.map(([l,v])=>`<div class="info-it"><label>${l}</label><span>${v}</span></div>`).join('')}</div>
     </div>
 
+    ${collabBadgesHtml}
+
     ${t.description?`<div class="tsk-det-section">
       <h4>📝 任务描述</h4>
       <div style="padding:10px 12px;background:#f9fafb;border-radius:8px;border-left:3px solid var(--g);font-size:13px;color:var(--ink);line-height:1.65;white-space:pre-wrap;word-break:break-word">${h(t.description)}</div>
@@ -3942,7 +4982,7 @@ function openTaskDetail(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${progressList.length>0?`<button class="btn btn-ai btn-sm" id="ai-tsk-sum-btn" onclick="aiSummarizeTaskProgress('${t.id}')" style="font-size:11px">🤖 AI总结</button>`:''}
           <button class="btn btn-ai btn-sm" id="ai-tsk-next-btn" onclick="aiSuggestNextAction('${t.id}')" style="font-size:11px">💡 下一步建议</button>
-          ${ce?`<button class="btn btn-p btn-sm" onclick="openProgressForm('${t.id}')">+ 添加进展</button>`:''}
+          ${canRecordProgress(t)?`<button class="btn btn-p btn-sm" onclick="openProgressForm('${t.id}')">+ 添加进展</button>`:''}
         </div>
       </div>
       <div id="ai-tsk-result-${t.id}" style="display:none;margin-bottom:10px;padding:10px 12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:8px;border:1px solid #c4b5fd;font-size:12px;color:var(--sl);line-height:1.7"></div>
@@ -4139,9 +5179,17 @@ async function saveProgress(){
   if(!t)return;
 
   const newProgress=parseInt(document.getElementById('pf-prog')?.value||'0',10);
-  const newStatus=document.getElementById('pf-status')?.value||t.status;
+  let newStatus=document.getElementById('pf-status')?.value||t.status;
   const blockers=document.getElementById('pf-blockers')?.value.trim()||'';
   const nextAction=document.getElementById('pf-next')?.value.trim()||'';
+
+  // v32.3:协作者不能改状态(Q3 规则),如果是协作者,强制保留原状态
+  const uidForCheck = currentUser?.id;
+  const isMainOwner = uidForCheck === t.assigneeId || uidForCheck === t.assignerId || uidForCheck === t.createdBy || isAdmin();
+  if(!isMainOwner && newStatus !== t.status){
+    toast('协作者不能修改任务状态,已忽略状态变更','err');
+    newStatus = t.status;
+  }
 
   // 进度异常状态强制要求填写说明
   if(newStatus==='slow' && !blockers){
@@ -4187,11 +5235,50 @@ async function saveProgress(){
   const returnTaskId = editingProgressTaskId;
   closeModal();
   toast('进展已记录');
+
+  // v31:如果当前用户是接收方(被指派的人),给指派方发"进度反馈"消息
+  // v32.2 修复 C1.4:主接收人或协作者更新进展,通知所有上级(创建人 + 改派人,且不重复)
+  const uid = currentUser?.id;
+  const isPrimaryReporting = t.assignerId && t.assigneeId === uid && t.assignerId !== uid;
+  const myCollabAsReporter = (DB.taskAssignees||[]).find(a=>a.taskId===t.id && a.userId===uid && a.role!=='primary');
+  const isCollabReporting = !!myCollabAsReporter;
+
+  if(isPrimaryReporting || isCollabReporting){
+    // 收件人集合(去重):
+    // - 主接收人汇报 → 通知 assignerId
+    // - 协作者汇报   → 通知 addedBy + assigneeId(主负责人) + createdBy(创建人,如果不是 createdBy 自己)
+    const notifySet = new Set();
+    if(isPrimaryReporting){
+      notifySet.add(t.assignerId);
+    }
+    if(isCollabReporting){
+      if(myCollabAsReporter.addedBy && myCollabAsReporter.addedBy !== uid) notifySet.add(myCollabAsReporter.addedBy);
+      if(t.assigneeId && t.assigneeId !== uid) notifySet.add(t.assigneeId);
+      if(t.createdBy && t.createdBy !== uid) notifySet.add(t.createdBy);
+    }
+    notifySet.delete(uid); // 不通知自己
+
+    const statusChangeText = t.status!==newStatus
+      ? `\n状态变更:${TSK_STATUS[t.status]?.label||t.status} → ${TSK_STATUS[newStatus]?.label||newStatus}` : '';
+    const blockerText = newStatus==='slow' && blockers ? `\n阻碍:${blockers}` : '';
+    const myRole = isPrimaryReporting ? '主负责人' : '协作负责人';
+    const contentText = `${currentUser?.name||'员工'}(${myRole}) 更新了任务进展:\n${content}${statusChangeText}\n当前进度:${newProgress}%${blockerText}${nextAction?'\n下一步:'+nextAction:''}`;
+
+    for(const toUid of notifySet){
+      sendMessage({
+        toUser: toUid,
+        type: 'task_progress',
+        title: `[进度更新] ${t.title||''}`,
+        content: contentText,
+        relatedTaskId: t.id,
+      });
+    }
+  }
+
   await loadTasks();
   await loadTaskProgress();
   // 如果当前还在任务详情页(或刚才是从详情页弹出的),保存后重新打开详情页
   if(curPage==='tasks'||curPage==='teamTasks'||curPage==='archive'){
-    // 只在用户从详情页点的"+添加进展"时回流(我们用启发式判断:返回到 detail)
     if(returnTaskId) openTaskDetail(returnTaskId);
   }
 }
@@ -4578,7 +5665,7 @@ ${blockerBlock}
 ${progBlock}
 
 <p style="margin-top:24pt;font-size:9pt;color:#6b7280;border-top:1pt solid #e5e7eb;padding-top:8pt;text-align:center">
-  北京花花食界食品科技有限公司 · CRM v28 (2.0) 任务管理 · 导出时间 ${new Date().toLocaleString('zh-CN')}
+  北京花花食界食品科技有限公司 · 客户与任务管理系统 · 任务模块 · 导出时间 ${new Date().toLocaleString('zh-CN')}
 </p>
 </body></html>`.trim();
 
@@ -6230,6 +7317,18 @@ async function confirmAIImport(){
       }else{
         successIds.add(t._localId);
         ok++;
+        // v32.3:AI 导入也要同步 task_assignees
+        if(taskObj.assigneeId){
+          try{
+            await supa.from('task_assignees').insert({
+              task_id: taskObj.id,
+              user_id: taskObj.assigneeId,
+              user_name: taskObj.assigneeName || getUserName(taskObj.assigneeId) || '',
+              role: 'primary',
+              added_by: currentUser?.id || null,
+            });
+          }catch(e){console.warn('[AI Import] task_assignees 同步失败:', e);}
+        }
       }
     }catch(e){
       console.error('[AI Import] exception:', e);
@@ -6240,6 +7339,7 @@ async function confirmAIImport(){
 
   await loadTasks();
   await loadDepartmentMembers();
+  await loadTaskAssignees();  // v32.3
   if(curPage==='tasks'||curPage==='teamTasks') refreshTasks?.();
 
   // R5 修复:成功的条目从草稿中移除,失败的保留供用户修复重试
@@ -6517,16 +7617,16 @@ function bulkChangeCustAssignee(){
   openModal('批量改派客户经理',
     `<div class="form-grid">
       <div class="fg full">
-        <label>新客户经理</label>
+        <label>新客户经理 <span class="req">*</span></label>
         <select id="bulk-cust-mgr">${opts}</select>
       </div>
-      <div class="fg full" style="background:#fef3c7;border-radius:7px;padding:9px;font-size:12px;color:#92400e">
-        将把已选中的 <strong>${selectedCustIds.size}</strong> 个客户的负责人改为新经理。<br>
-        注意:这只改 <code>assignedTo</code> 字段(姓名标签),不改 <code>createdBy</code>(数据权属)。
+      <div class="fg full" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:7px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.7">
+        将把已选中的 <strong>${selectedCustIds.size}</strong> 个客户的<strong>负责经理</strong>改为新经理。<br>
+        💡 原创建人仍然能看到这些客户(数据权属保留),只是<strong>显示的负责经理姓名</strong>更新为新经理。
       </div>
     </div>`,
     `<button class="btn" onclick="closeModal()">取消</button>
-     <button class="btn btn-p" onclick="applyBulkChangeCustAssignee()">确认</button>`);
+     <button class="btn btn-p" onclick="applyBulkChangeCustAssignee()">确认改派</button>`);
 }
 async function applyBulkChangeCustAssignee(){
   const newMgr = document.getElementById('bulk-cust-mgr')?.value;
@@ -7176,6 +8276,7 @@ function renderPage(p){
   else if(p==='report')c.innerHTML=renderReportHub();
   else if(p==='users')c.innerHTML=renderUserManagementHub();
   else if(p==='ai')c.innerHTML=renderAISettings();
+  else if(p==='messages')c.innerHTML=renderMessageCenter();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -7275,6 +8376,8 @@ async function updateProfileInDB(id, fields){
       supa.from('tasks').update({assigner_name: newName}).eq('assigner_id', id),
       supa.from('tasks').update({created_by_name: newName}).eq('created_by', id),
       supa.from('task_progress').update({created_by_name: newName}).eq('created_by', id),
+      // v32.2 修复 B3.1:同步 task_assignees 的 user_name
+      supa.from('task_assignees').update({user_name: newName}).eq('user_id', id),
     ]);
   }
 
@@ -7622,8 +8725,12 @@ async function confirmDelUser(id){
   if(id===currentUser?.id){toast('不能禁用当前登录账号','err');return;}
 
   // N4 修复:禁用用户前检查名下未完成任务,提醒 admin 先做交接
+  // v32.3 增强:也包括作为协作者的未完成任务
+  const myCollabTaskIds = new Set(
+    (DB.taskAssignees||[]).filter(a=>a.userId===id && a.role!=='primary').map(a=>a.taskId)
+  );
   const pendingTasks = DB.tasks.filter(t=>
-    t.assigneeId===id &&
+    (t.assigneeId===id || myCollabTaskIds.has(t.id)) &&
     t.status!=='done' &&
     t.status!=='archived'
   );
@@ -8060,6 +9167,170 @@ async function testAIConnection(modelId){
 }
 
 // ── AI设置页面渲染 ────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// v31 — 消息中心(UI 渲染)
+// ══════════════════════════════════════════════════════════
+let _msgTab = 'all'; // 'all' | 'unread' | 'task' | 'meeting' | 'sent'
+
+function switchMsgTab(t){
+  _msgTab = t;
+  if(curPage==='messages') renderPage('messages');
+}
+
+function renderMessageCenter(){
+  if(!currentUser) return '<div class="pw"><div class="perm-banner">⛔ 请先登录</div></div>';
+
+  // 按 tab 过滤
+  let list;
+  const allMine = DB.messages.filter(m=>m.toUser===currentUser.id);
+  const sent = DB.messages.filter(m=>m.fromUser===currentUser.id);
+  if(_msgTab==='all') list = allMine;
+  else if(_msgTab==='unread') list = allMine.filter(m=>!m.read);
+  else if(_msgTab==='task') list = allMine.filter(m=>['task_assigned','task_remind','task_progress','task_accepted'].includes(m.type));
+  else if(_msgTab==='meeting') list = allMine.filter(m=>m.type==='meeting_invite');
+  else if(_msgTab==='sent') list = sent;
+
+  // 排序:未读在前 + 时间倒序
+  list = [...list].sort((a,b)=>{
+    if(_msgTab!=='sent'){
+      if(!a.read && b.read) return -1;
+      if(a.read && !b.read) return 1;
+    }
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  const unreadCounts = getUnreadByType();
+  const totalUnread = getUnreadCount();
+  const totalTaskUnread = unreadCounts.task_assigned + unreadCounts.task_remind + unreadCounts.task_progress + unreadCounts.task_accepted;
+
+  return `<div class="pw">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--ink)">💬 消息中心</div>
+        <div style="font-size:12px;color:var(--ms);margin-top:3px">${totalUnread>0 ? `<b style="color:#dc2626">${totalUnread} 条未读</b>` : '全部已读 ✓'} · 共 ${allMine.length} 条收到 · ${sent.length} 条发出</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${totalUnread>0 ? '<button class="btn btn-sm" onclick="markAllMessagesRead()">✓ 全部标为已读</button>' : ''}
+      </div>
+    </div>
+
+    <div class="msg-tabs" style="display:flex;gap:4px;border-bottom:2px solid var(--sv);margin-bottom:14px;overflow-x:auto;flex-wrap:nowrap">
+      <button class="msg-tab ${_msgTab==='all'?'active':''}" onclick="switchMsgTab('all')">全部 (${allMine.length})</button>
+      <button class="msg-tab ${_msgTab==='unread'?'active':''}" onclick="switchMsgTab('unread')">未读 ${totalUnread>0?`<span class="msg-tab-badge">${totalUnread}</span>`:''}</button>
+      <button class="msg-tab ${_msgTab==='task'?'active':''}" onclick="switchMsgTab('task')">任务消息 ${totalTaskUnread>0?`<span class="msg-tab-badge">${totalTaskUnread}</span>`:''}</button>
+      <button class="msg-tab ${_msgTab==='meeting'?'active':''}" onclick="switchMsgTab('meeting')">会议邀请 ${unreadCounts.meeting_invite>0?`<span class="msg-tab-badge">${unreadCounts.meeting_invite}</span>`:''}</button>
+      <button class="msg-tab ${_msgTab==='sent'?'active':''}" onclick="switchMsgTab('sent')">已发送</button>
+    </div>
+
+    ${list.length===0 ? `
+      <div class="empty-st">
+        <div class="ei">📭</div>
+        <h3>${_msgTab==='sent'?'还没发过消息':'此分类下没有消息'}</h3>
+        <p>${_msgTab==='unread'?'你已经处理完所有未读消息了 ✓':'消息会在你被指派任务或收到反馈时出现'}</p>
+      </div>
+    ` : list.map(m=>renderMessageCard(m)).join('')}
+  </div>`;
+}
+
+function renderMessageCard(m){
+  // 消息类型 → 图标 + 颜色
+  const typeMeta = {
+    task_assigned:  {ico:'📋', color:'#2563eb', bg:'#eff6ff', label:'任务指派'},
+    task_remind:    {ico:'⏰', color:'#f59e0b', bg:'#fffbeb', label:'催办进度'},
+    task_progress:  {ico:'📈', color:'#16a34a', bg:'#f0fdf4', label:'进度反馈'},
+    task_accepted:  {ico:'✓',  color:'#16a34a', bg:'#f0fdf4', label:'已接收确认'},
+    meeting_invite: {ico:'📅', color:'#7c3aed', bg:'#f5f3ff', label:'会议邀请'},
+    system:         {ico:'🔧', color:'#64748b', bg:'#f8fafc', label:'系统通知'},
+    general:        {ico:'💬', color:'#64748b', bg:'#f8fafc', label:'消息'},
+  };
+  const meta = typeMeta[m.type] || typeMeta.general;
+  const isUnread = !m.read && m.toUser === currentUser?.id;
+  const isSent = m.fromUser === currentUser?.id;
+  const otherName = isSent ? m.toName : m.fromName;
+  const otherLabel = isSent ? '发给' : '来自';
+
+  // 关联任务
+  const task = m.relatedTaskId ? DB.tasks.find(t=>t.id===m.relatedTaskId) : null;
+  const taskLink = task ? `<button class="btn btn-sm" onclick="closeModal();_jumpToTask('${m.relatedTaskId}')">查看任务详情 →</button>` : '';
+
+  // 会议邀请额外信息
+  let meetingInfo = '';
+  if(m.type==='meeting_invite' && m.relatedMeetingData){
+    const md = m.relatedMeetingData;
+    meetingInfo = `
+      <div style="margin-top:8px;padding:8px;background:rgba(124,58,237,.08);border-radius:6px;font-size:12px">
+        <div>📅 <b>时间</b>:${h(md.startTime||'未定')}</div>
+        <div>📍 <b>地点</b>:${h(md.location||'线上')}</div>
+        ${md.participants ? `<div>👥 <b>参会</b>:${h(md.participants)}</div>` : ''}
+        ${md.icsData ? `<button class="btn btn-sm" style="margin-top:6px" onclick="_downloadMeetingIcs('${m.id}')">📥 加入我的日历</button>` : ''}
+      </div>`;
+  }
+
+  // 任务指派额外操作 — v32.1:主负责人 和 协作者都可接收
+  let actionBtns = '';
+  if(m.type==='task_assigned' && task){
+    const uid = currentUser?.id;
+    const isPrimaryUnaccepted = task.assigneeId===uid && !task.acceptedAt;
+    const myCollabRec = (DB.taskAssignees||[]).find(a=>a.taskId===task.id && a.userId===uid && a.role!=='primary');
+    const isCollabUnaccepted = myCollabRec && !myCollabRec.acceptedAt;
+    if(isPrimaryUnaccepted || isCollabUnaccepted){
+      actionBtns = `<button class="btn btn-sm btn-p" onclick="event.stopPropagation();acceptTask('${task.id}')">✓ 我已接收</button>`;
+    }
+  }
+
+  return `
+    <div class="msg-card ${isUnread?'msg-unread':''}" onclick="_openMessageDetail('${m.id}')">
+      <div class="msg-card-icon" style="background:${meta.bg};color:${meta.color}">${meta.ico}</div>
+      <div class="msg-card-body">
+        <div class="msg-card-hdr">
+          <span class="msg-card-type" style="color:${meta.color}">${meta.label}</span>
+          <span class="msg-card-time">${fd(m.createdAt)}</span>
+        </div>
+        <div class="msg-card-title">${isUnread?'<span class="msg-dot"></span>':''}${h(m.title||'')}</div>
+        <div class="msg-card-meta">${otherLabel}:<b>${h(otherName||'(已删除用户)')}</b></div>
+        ${m.content ? `<div class="msg-card-content">${h(m.content).replace(/\n/g,'<br/>')}</div>` : ''}
+        ${meetingInfo}
+        ${(taskLink || actionBtns) ? `<div class="msg-card-actions">${actionBtns} ${taskLink}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// 点击消息卡片 → 标记已读 + 展开详情(此版用 toast 简单实现)
+async function _openMessageDetail(msgId){
+  const m = DB.messages.find(x=>x.id===msgId);
+  if(!m) return;
+  if(!m.read && m.toUser === currentUser?.id){
+    await markMessageRead(msgId);
+  }
+}
+
+// 跳到关联任务
+function _jumpToTask(taskId){
+  const t = DB.tasks.find(x=>x.id===taskId);
+  if(!t){toast('任务不存在','err');return;}
+  // 进入对应页面 + 打开详情
+  if(t.assigneeId === currentUser?.id){
+    nav(document.querySelector('[data-page=tasks]'), 'tasks');
+  }else if(isAdmin() || isLeader()){
+    nav(document.querySelector('[data-page=teamTasks]'), 'teamTasks');
+  }
+  setTimeout(()=>openTaskDetail(taskId), 100);
+}
+
+// 下载会议 .ics
+function _downloadMeetingIcs(msgId){
+  const m = DB.messages.find(x=>x.id===msgId);
+  if(!m?.relatedMeetingData?.icsData){toast('会议数据缺失','err');return;}
+  const blob = new Blob([m.relatedMeetingData.icsData], {type:'text/calendar'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `meeting_${m.id}.ics`;
+  link.click();
+  toast('日历文件已下载,请双击导入到本地日历');
+}
+
+
 function renderAISettings(){
   const cfg=loadAIConfig();
   const activeModel=cfg.activeModel||'deepseek';
@@ -8216,7 +9487,7 @@ function renderSharedAIConfigSection(){
         <div style="width:28px;height:28px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px">✓</div>
         <div>
           <div style="font-weight:600;color:#166534;font-size:14px">公司已统一配置 AI 服务</div>
-          <div style="font-size:11px;color:#15803d;margin-top:2px">您可直接在 CRM 各处使用 AI 功能,费用由公司统一承担。</div>
+          <div style="font-size:11px;color:#15803d;margin-top:2px">您可直接在系统各处使用 AI 功能,费用由公司统一承担。</div>
         </div>
       </div>
       <div style="font-size:12px;color:#166534;line-height:1.7;padding-top:8px;border-top:1px solid #bbf7d0;margin-top:8px">
@@ -8657,19 +9928,19 @@ async function aiDashboardInsight(){
 function openMapChooser(address,companyName){
   if(!address){toast('该客户暂未填写地址','info');return;}
   const enc=encodeURIComponent(address);
-  const maps=[
-    {name:'高德地图', emoji:'🗺', url:`https://uri.amap.com/marker?position=&name=${enc}&src=花花食界CRM&coordinate=gaode`},
-    {name:'百度地图', emoji:'📍', url:`https://api.map.baidu.com/marker?title=${enc}&content=${enc}&output=html&src=花花食界CRM`},
-    {name:'腾讯地图', emoji:'🌏', url:`https://apis.map.qq.com/uri/v1/marker?marker=addr:${address}&referer=花花食界CRM`},
-    {name:'谷歌地图', emoji:'🌐', url:`https://maps.google.com/maps?q=${enc}`},
-  ];
-  const btnHtml=maps.map(m=>`<button class="map-btn" onclick="window.open('${m.url}','_blank');closeModal()">
-    <span style="font-size:20px">${m.emoji}</span>
-    <div><div style="font-weight:600">${m.name}</div><div style="font-size:11px;color:var(--ms)">${address.slice(0,20)}${address.length>20?'…':''}</div></div>
-  </button>`).join('');
-  openModal(`🗺 选择地图 - ${h(companyName||'')}`,
-    `<div style="margin-bottom:12px;font-size:13px;color:var(--sl)">📍 ${h(address)}</div>
-    <div class="map-chooser-grid">${btnHtml}</div>`,
+  // v32.4:只保留高德地图(国内主流,其他平台 URI 兼容性差)
+  const amapUrl = `https://uri.amap.com/marker?position=&name=${enc}&src=花花食界&coordinate=gaode`;
+  openModal(`🗺 在高德地图查看 - ${h(companyName||'')}`,
+    `<div style="margin-bottom:14px;font-size:13px;color:var(--sl)">📍 ${h(address)}</div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <button class="map-btn" style="width:100%;justify-content:flex-start" onclick="window.open('${amapUrl}','_blank');closeModal()">
+        <span style="font-size:22px">🗺</span>
+        <div style="text-align:left">
+          <div style="font-weight:600">在高德地图查看位置</div>
+          <div style="font-size:11px;color:var(--ms);margin-top:2px">浏览器中打开,可继续在 APP 中导航</div>
+        </div>
+      </button>
+    </div>`,
     `<button class="btn" onclick="closeModal()">取消</button>
      <button class="btn btn-p" onclick="navigateTo('${address.replace(/'/g,"\\'")}');closeModal()">🧭 开始导航</button>`);
 }
@@ -8678,7 +9949,7 @@ function navigateTo(address){
   navigator.geolocation.getCurrentPosition(pos=>{
     const{latitude:lat,longitude:lng}=pos.coords;
     const enc=encodeURIComponent(address);
-    window.open(`https://uri.amap.com/navigation?from=${lng},${lat},我的位置&to=&toname=${enc}&mode=car&src=花花食界CRM`,'_blank');
+    window.open(`https://uri.amap.com/navigation?from=${lng},${lat},我的位置&to=&toname=${enc}&mode=car&src=花花食界`,'_blank');
   },()=>{
     openMapChooser(address,'');
   },{enableHighAccuracy:true,timeout:8000});
@@ -8760,7 +10031,7 @@ function addToCalendar({title,date,description,location=''}){
   const uid=gid()+'@huahua-crm';
   const ics=[
     'BEGIN:VCALENDAR','VERSION:2.0',
-    'PRODID:-//花花食界CRM//CN',
+    'PRODID:-//花花食界 客户与任务管理系统//CN',
     'CALSCALE:GREGORIAN','METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `DTSTART;TZID=Asia/Shanghai:${d}T090000`,
@@ -9152,7 +10423,7 @@ ${(()=>{ const td=getTasksReportData(r.from,r.to,isAdmin()?repState.mgr:null); r
   const tasksData = getTasksReportData(r.from, r.to, isAdmin()?repState.mgr:null);
   if(tasksData.hasData) md += '\n' + tasksData.markdown;
 
-  md+=`\n---\n\n*本报告由花花食界CRM系统自动生成 · v28 (2.0)*`;
+  md+=`\n---\n\n*本报告由花花食界客户与任务管理系统自动生成 · v28 (2.0)*`;
   repState.report=md;repState.done=true;repState.loading=false;
   repState.isLocalDone=true;repState.source='local';
   refreshReport();toast('周报生成成功！可点击"🤖 AI精炼"进一步优化');
@@ -9293,7 +10564,7 @@ function doExportDoc(fileBase){
 <body>
 ${htmlBody}
 <p style="margin-top:24pt;font-size:10pt;color:#6b7280;border-top:1pt solid #e5e7eb;padding-top:8pt">
-  北京花花食界食品科技有限公司 · CRM系统导出 · ${new Date().toLocaleString('zh-CN')}
+  北京花花食界食品科技有限公司 · 客户与任务管理系统导出 · ${new Date().toLocaleString('zh-CN')}
 </p>
 </body></html>`.trim();
 
@@ -9849,7 +11120,7 @@ function doExportFull(){
     const wkFU=DB.followups.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to);
     // 概览 sheet 数据
     const summaryData=[
-      ['花花食界 CRM 数据汇总报表',''],
+      ['花花食界 客户与任务管理系统 · 数据汇总报表',''],
       ['导出时间', new Date().toLocaleString('zh-CN')],
       ['导出人', currentUser?.name||'—'],
       ['',''],
@@ -9968,7 +11239,7 @@ function renderImportModal(){
 
   const o=document.createElement('div');
   o.className='overlay';o.id='modal-ov';
-  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.onclick=e=>{if(e.target===o)_safeCloseModal();};  /* v32.2 修复 R5.1:导入向导也防误关 */
 
   let bodyHTML='';
 
@@ -10620,7 +11891,7 @@ function addCalendarFromForm(){
   const cust=DB.customers.find(c=>c.id===custId);
   if(!date){toast('请先选择下次跟进日期','err');return;}
   addToCalendar({
-    title:`[花花食界CRM] 跟进 ${cust?.companyName||'客户'}`,
+    title:`[花花食界] 跟进 ${cust?.companyName||'客户'}`,
     date,
     description:`跟进人：${currentUser?.name||''}\n下一步行动：${action}\n联系方式：${cust?.phone||''}`,
     location:cust?.address||cust?.city||''
@@ -10697,24 +11968,37 @@ function delFU(id){
 // ══════════════════════════════════════════════════════════
 // ── 模态框引擎
 // ══════════════════════════════════════════════════════════
+// v32:Modal 关闭保护 — 完全禁用蒙层点击关闭(只有点 × / 取消 / 保存才能关)
+//      这是最简单可靠的方案,避免误操作丢内容
+function _attachModalDirtyTracking(modalDiv){
+  // 保留接口,空实现(向前兼容)
+}
+function _safeCloseModal(){
+  // v32:点蒙层不再关闭,什么都不做(silent ignore)
+  // 用户必须点 × 或按钮才能关闭
+  return;
+}
+
 function openModal(title,body,footer){
   const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
-  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.onclick=e=>{if(e.target===o) _safeCloseModal();};  // v31:改为安全关闭
   o.innerHTML=`<div class="modal"><div class="modal-hdr"><span class="modal-ttl">${title}</span><button class="modal-cls" onclick="closeModal()">×</button></div><div class="modal-body">${body}</div><div class="modal-ft">${footer}</div></div>`;
   document.body.appendChild(o);
+  _attachModalDirtyTracking(o.querySelector('.modal'));  // v31
 }
 function openRaw(html, maxWidth){
   const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
-  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.onclick=e=>{if(e.target===o) _safeCloseModal();};  // v31
   const d=document.createElement('div');d.className='modal';d.style.maxWidth=(maxWidth||680)+'px';
   d.innerHTML=html;o.appendChild(d);document.body.appendChild(o);
+  _attachModalDirtyTracking(d);  // v31
 }
 function openConfirm(msg,onOk){
   const fnName='_confirmOk_'+gid();
   window[fnName]=()=>{onOk();delete window[fnName];};
   const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
+  // confirm 框不需要 dirty 保护,直接关
   o.onclick=e=>{if(e.target===o)closeModal();};
-  // 根据消息内容智能选择按钮文字
   const isLogout=msg.includes('退出登录');
   const isDisable=msg.includes('禁用');
   const btnTxt=isLogout?'确认退出':isDisable?'确认禁用':'确认删除';
@@ -10733,7 +12017,7 @@ function openApiKeyModal(onSavedCallback){
 
   const o=document.createElement('div');
   o.className='overlay';o.id='modal-ov';
-  o.onclick=e=>{if(e.target===o)closeModal();};
+  o.onclick=e=>{if(e.target===o)_safeCloseModal();};  /* v32.2 修复 R5.1:API Key 弹窗也防误关 */
   o.innerHTML=`<div class="apikey-box">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <div style="width:40px;height:40px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🔑</div>
