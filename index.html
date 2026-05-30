@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v32.4 (3.2 Beta)</title>
+<title>花花食界客户与任务管理系统 · v33.0 (3.3 Beta)</title>
 <!-- v31.0.2: 移除 Google Fonts(国内访问超时),改用系统字体回退 -->
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
-  花花食界客户与任务管理系统 v32.4 (3.2 Beta) RELEASE
+  花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
   v29.2 Stable 修复说明(2026-05-15):
@@ -1296,7 +1296,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
     <div class="login-logo">
       <div class="login-logo-icon">🌿</div>
       <h1>花花食界客户与任务管理系统</h1>
-      <p>内部专用 · v3.2</p>
+      <p>内部专用 · v3.3</p>
     </div>
     <div class="login-field">
       <label>公司邮箱</label>
@@ -1331,7 +1331,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-icon">🌿</div>
         <div>
           <div class="sb-name">花花食界</div>
-          <div class="sb-sub">客户与任务管理系统 · v3.2</div>
+          <div class="sb-sub">客户与任务管理系统 · v3.3</div>
         </div>
       </div>
     </div>
@@ -1410,7 +1410,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v32.4 (3.2 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -4800,7 +4800,7 @@ function confirmDelTask(id){
   const t=DB.tasks.find(x=>x.id===id);
   if(!t)return;
   if(!canDeleteTask(t)){toast('无权删除此任务','err');return;}
-  openConfirm(`确定删除任务"${t.title}"?将同时删除其所有进展记录,不可恢复。`, async()=>{
+  openConfirm(`确定删除任务"${h(t.title)}"?将同时删除其所有进展记录,不可恢复。`, async()=>{
     closeModal();
     showLoading('删除中...');
     await deleteTaskFromDB(id);
@@ -5178,7 +5178,9 @@ async function saveProgress(){
   const t=DB.tasks.find(x=>x.id===editingProgressTaskId);
   if(!t)return;
 
-  const newProgress=parseInt(document.getElementById('pf-prog')?.value||'0',10);
+  let newProgress=parseInt(document.getElementById('pf-prog')?.value||'0',10);
+  if(isNaN(newProgress)) newProgress=0;
+  newProgress=Math.max(0,Math.min(100,newProgress));  // v33:防御性 clamp
   let newStatus=document.getElementById('pf-status')?.value||t.status;
   const blockers=document.getElementById('pf-blockers')?.value.trim()||'';
   const nextAction=document.getElementById('pf-next')?.value.trim()||'';
@@ -6219,7 +6221,7 @@ function confirmDelDept(id){
   const memberCount = DB.departmentMembers.filter(m=>m.departmentId===id).length;
   const warning = linkedTasks>0 ? `\n\n⚠️ 该部门关联了 ${linkedTasks} 个任务,删除后任务的"所属部门"字段会被清空(任务本身不会被删除)。` : '';
   const memberWarn = memberCount>0 ? `\n⚠️ 该部门有 ${memberCount} 个成员关系,将一并解除。` : '';
-  openConfirm(`确定删除"${d.name}"?不可恢复。${warning}${memberWarn}`, async()=>{
+  openConfirm(`确定删除"${h(d.name)}"?不可恢复。${warning}${memberWarn}`, async()=>{
     closeModal();
     showLoading('删除中...');
     // 先删 task 的 department_id 关联(置空)
@@ -6319,7 +6321,7 @@ async function changeMemberRole(deptId, userId, newRole){
 
 async function removeMember(deptId, userId){
   const u = DB.profiles.find(p=>p.id===userId);
-  openConfirm(`确定将"${u?.name||'此用户'}"移出部门?该用户将失去本部门相关任务的查看/编辑权限。`, async()=>{
+  openConfirm(`确定将"${h(u?.name||'此用户')}"移出部门?该用户将失去本部门相关任务的查看/编辑权限。`, async()=>{
     closeModal();
     const {error}=await supa.from('department_members').delete()
       .eq('department_id',deptId).eq('user_id',userId);
@@ -6649,6 +6651,61 @@ function switchAIImpTab(tab, btn){
 
 // ── 步骤 1:提取原始文本 ─────────────────────────────────
 // 提取来源:当前激活的 tab(文本 / Excel / Word)
+
+// v32.5:智能 JSON 数组解析(支持 markdown 代码块、截断恢复)
+// 返回 {parsed, truncated, recovered}
+//   parsed:    解析得到的对象数组(尽可能多)
+//   truncated: 是否检测到被截断
+//   recovered: 截断时,从碎片中恢复的对象数量
+function _parseAIJsonArray(rawText){
+  if(!rawText || typeof rawText!=='string') throw new Error('AI 未返回任何内容');
+  let cleaned = rawText.trim();
+  // 1. 去除 markdown 代码块包裹(```json ... ```)
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'');
+  // 2. 去除可能的前置文字(找第一个 [)
+  const start = cleaned.indexOf('[');
+  if(start<0) throw new Error('未找到 JSON 数组开始符 [(AI 返回内容里没有任何 JSON 数据)');
+  cleaned = cleaned.slice(start);
+  // 3. 尝试找最后的 ] — 完整 JSON
+  const end = cleaned.lastIndexOf(']');
+  if(end>0){
+    try{
+      const parsed = JSON.parse(cleaned.slice(0, end+1));
+      if(Array.isArray(parsed)) return {parsed, truncated:false, recovered:parsed.length};
+    }catch(e){
+      // 整体解析失败,落入碎片恢复
+    }
+  }
+  // 4. 没有结束 ] 或解析失败 → 尝试逐对象恢复(碎片解析)
+  // 找出所有顶层 { ... } 完整对象
+  const objects = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let objStart = -1;
+  for(let i=1; i<cleaned.length; i++){  // 跳过开头的 [
+    const ch = cleaned[i];
+    if(escape){escape=false; continue;}
+    if(ch==='\\'){escape=true; continue;}
+    if(ch==='"' && !escape){inString=!inString; continue;}
+    if(inString) continue;
+    if(ch==='{'){
+      if(depth===0) objStart=i;
+      depth++;
+    }else if(ch==='}'){
+      depth--;
+      if(depth===0 && objStart>=0){
+        try{
+          objects.push(JSON.parse(cleaned.slice(objStart, i+1)));
+        }catch(e){/* 单对象损坏,跳过 */}
+        objStart=-1;
+      }
+    }
+  }
+  if(objects.length===0) throw new Error('JSON 数组无法解析(AI 返回的数据格式严重损坏)');
+  return {parsed:objects, truncated:true, recovered:objects.length};
+}
+
 async function _aiImportGetRawText(){
   const activeTab = document.querySelector('.ai-imp-tab.active')?.textContent || '';
   if(activeTab.includes('文本')){
@@ -6889,7 +6946,7 @@ ${rawText}`;
 
   let result;
   try{
-    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000, _action:'import_task', _actionLabel:'AI 任务批量导入', _cost:10});
+    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:8000, _action:'import_task', _actionLabel:'AI 任务批量导入', _cost:10});
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){stEl.style.background='#fee2e2';stEl.style.color='#991b1b';stEl.textContent='❌ AI 调用失败:'+(e.message||e);}
@@ -6902,25 +6959,20 @@ ${rawText}`;
     return;
   }
 
-  // 解析 JSON — 去除 markdown 包裹和前后干扰
+  // 解析 JSON — v32.5 用智能解析函数(支持 markdown / 截断恢复)
   let parsed;
+  let parseInfo = null;
   try{
-    let cleaned = result.trim();
-    // 去除 ```json...``` 包裹
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-    // 取第一个 [ 到最后一个 ] 之间内容(防止 AI 加额外文字)
-    const start = cleaned.indexOf('[');
-    const end = cleaned.lastIndexOf(']');
-    if(start<0 || end<0 || end<start) throw new Error('未找到 JSON 数组');
-    cleaned = cleaned.slice(start, end+1);
-    parsed = JSON.parse(cleaned);
-    if(!Array.isArray(parsed)) throw new Error('返回不是数组');
+    const ret = _parseAIJsonArray(result);
+    parsed = ret.parsed;
+    parseInfo = ret;
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){
       stEl.style.background='#fee2e2';stEl.style.color='#991b1b';
       stEl.innerHTML=`❌ AI 返回格式异常,无法解析为任务列表:${h(e.message||e)}
-        <div style="margin-top:8px;padding:6px;background:#fff;border-radius:5px;font-family:monospace;font-size:11px;max-height:120px;overflow:auto">${h(result.slice(0,500))}${result.length>500?'…':''}</div>`;
+        <div style="margin-top:8px;padding:6px;background:#fff;border-radius:5px;font-family:monospace;font-size:11px;max-height:120px;overflow:auto">${h(result.slice(0,500))}${result.length>500?'…':''}</div>
+        <div style="margin-top:6px;font-size:11px;color:#374151">💡 建议:① 减少输入文件中的任务数量(每次 ≤ 20 条);② 换一个 AI 模型;③ 简化数据(去掉超长备注)</div>`;
     }
     return;
   }
@@ -6942,6 +6994,11 @@ ${rawText}`;
 
   // 规范化每条任务(防御 AI 返回的字段类型异常)
   _aiImportDraft = parsed.map(_aiImportNormalizeTask);
+
+  // v32.5:如果是截断恢复的,提醒用户
+  if(parseInfo && parseInfo.truncated){
+    toast(`⚠ AI 输出被截断,已恢复 ${parseInfo.recovered} 条任务。如果数据较多,请分批导入`,'info');
+  }
 
   // 切换到预览界面
   closeModal();
@@ -7814,7 +7871,7 @@ async function aiImportCustAnalyze(){
 - status: 状态 "活跃"/"跟进中"/"暂停"/"合作中"/"成交"/"流失"(无法判断填 "跟进中")
 - source: 来源 "展会"/"转介绍"/"网络"/"电话开发"/"自拓"/"其他"(无法判断填 "其他")
 - assignedTo: 负责人姓名(从已知员工中匹配:${userList||'(无)'};不匹配则留空)
-- notes: 备注
+- notes: 备注(**关键限制:最多 100 字以内**,过长内容请精简概括或截断)
 
 **输出要求**:严格的 JSON 数组,无任何解释、寒暄、markdown 标记。即使只有公司名,也要输出。仅在**完全找不到任何公司信息**时返回 [].
 
@@ -7829,7 +7886,7 @@ async function aiImportCustAnalyze(){
 
   let result;
   try{
-    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:2000, _action:'import_cust', _actionLabel:'AI 客户批量导入', _cost:10});
+    result = await callAI({system:systemPrompt, prompt:userPrompt, maxTokens:8000, _action:'import_cust', _actionLabel:'AI 客户批量导入', _cost:10});
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){stEl.style.background='#fee2e2';stEl.style.color='#991b1b';stEl.textContent='❌ AI 调用失败:'+(e.message||e);}
@@ -7842,23 +7899,20 @@ async function aiImportCustAnalyze(){
     return;
   }
 
-  // 解析 JSON
+  // 解析 JSON — v32.5 用智能解析函数
   let parsed;
+  let parseInfo = null;
   try{
-    let cleaned = result.trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-    const start = cleaned.indexOf('[');
-    const end = cleaned.lastIndexOf(']');
-    if(start<0 || end<0 || end<start) throw new Error('未找到 JSON 数组');
-    cleaned = cleaned.slice(start, end+1);
-    parsed = JSON.parse(cleaned);
-    if(!Array.isArray(parsed)) throw new Error('返回不是数组');
+    const ret = _parseAIJsonArray(result);
+    parsed = ret.parsed;
+    parseInfo = ret;
   }catch(e){
     if(goBtn){goBtn.disabled=false;goBtn.textContent='🤖 开始 AI 分析';}
     if(stEl){
       stEl.style.background='#fee2e2';stEl.style.color='#991b1b';
       stEl.innerHTML=`❌ AI 返回格式异常:${h(e.message||e)}
-        <div style="margin-top:8px;padding:6px;background:#fff;border-radius:5px;font-family:monospace;font-size:11px;max-height:120px;overflow:auto">${h(result.slice(0,500))}${result.length>500?'…':''}</div>`;
+        <div style="margin-top:8px;padding:6px;background:#fff;border-radius:5px;font-family:monospace;font-size:11px;max-height:120px;overflow:auto">${h(result.slice(0,500))}${result.length>500?'…':''}</div>
+        <div style="margin-top:6px;font-size:11px;color:#374151">💡 建议:① 减少输入文件中的客户数量(每次 ≤ 20 条);② 换一个 AI 模型;③ 简化数据(去掉超长备注/notes)</div>`;
     }
     return;
   }
@@ -7879,6 +7933,11 @@ async function aiImportCustAnalyze(){
   }
 
   _aiImportCustDraft = parsed.map(_aiImportNormalizeCust);
+
+  // v32.5:截断恢复时提醒用户
+  if(parseInfo && parseInfo.truncated){
+    toast(`⚠ AI 输出被截断,已恢复 ${parseInfo.recovered} 条客户。如果数据较多,请分批导入`,'info');
+  }
 
   closeModal();
   openAIImportCustPreview();
@@ -11660,7 +11719,7 @@ async function saveCust(){
 function confirmDelCust(id){
   const c=DB.customers.find(x=>x.id===id);
   if(!isAdmin()&&c?.createdBy!==currentUser?.id){toast('无权删除他人客户','err');return;}
-  openConfirm(`确定删除"${c?.companyName}"？同时删除其所有跟进记录，不可恢复。`,async()=>{
+  openConfirm(`确定删除"${h(c?.companyName)}"？同时删除其所有跟进记录，不可恢复。`,async()=>{
     closeModal();
     showLoading('删除中...');
     await deleteCustFromDB(id);
@@ -12003,6 +12062,8 @@ function openConfirm(msg,onOk){
   const isDisable=msg.includes('禁用');
   const btnTxt=isLogout?'确认退出':isDisable?'确认禁用':'确认删除';
   const btnCls=isLogout?'btn btn-p':'btn btn-d';
+  // ⚠ msg 支持富文本(部分调用方传 <strong>/<br>/<div>)。
+  // 安全约定:调用方若拼入用户数据(任务标题/客户名等),必须自行用 h() 转义。
   o.innerHTML=`<div class="confirm-box"><div style="font-size:36px;margin-bottom:12px">${isLogout?'🚪':'⚠️'}</div><p style="font-size:14px;color:var(--sl);line-height:1.7">${msg}</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="closeModal()">取消</button><button class="${btnCls}" onclick="${fnName}();closeModal()">${btnTxt}</button></div></div>`;
   document.body.appendChild(o);
 }
