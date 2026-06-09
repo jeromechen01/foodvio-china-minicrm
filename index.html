@@ -3,13 +3,29 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0 (3.3.6.1 Beta)</title>
+<title>花花食界客户与任务管理系统 · v33.0 (3.3.6.2 Beta)</title>
 <!-- v31.0.2: 移除 Google Fonts(国内访问超时),改用系统字体回退 -->
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.4.2 修复(2026-06-09):JWT 过期导致操作失败(如"添加成员失败:JWT expired")
+    根因:MiniSupabase 的 token 刷新只在 getSession() 被动触发,而数据
+      CRUD(select/insert/upsert/update/delete)与 RPC 均为裸 fetch,
+      既不预检过期、也不在 401/JWT expired 后刷新重试 → 页面开久了
+      第一个写操作就报 JWT expired。
+    修复:
+      · 新增统一包装 dataFetch():① 请求前若 token <60s 到期先静默刷新;
+        ② 收到 401 或 JWT/token 过期错误,自动刷新一次并重试(重试时
+        重新合并最新 token 头);五处数据路径 + rpc() 全部改用它。
+      · rest()(auth 接口)同样加预检 + 401 重试,并防止刷新请求自身递归。
+      · 若 refresh_token 也失效 → 触发 SIGNED_OUT,提示"登录已过期,请重新
+        登录"并回到登录页(不再卡死或静默失败)。
+    注:Supabase access_token 默认有效期 1 小时,本修复让长时间停留的
+       页面在下次操作时自动续期,无需用户手动刷新。
+
   ══════════════════════════════════════════════════════════════════
   v33.0.4.1 修复(2026-05-31):
     问题1【群发短信 iOS 只进1个号码】:iOS Safari 对 sms: 多收件人
@@ -188,7 +204,25 @@ window.supabase = (function(){
     }
 
     // ── REST 辅助 ────────────────────────────────────────
-    async function rest(method, path, body, extraHeaders){
+    // v33.0.4.2:增加 JWT 自动刷新
+    //   ① 发请求前:若已登录且 access_token 即将过期(<60s),先静默刷新
+    //   ② 收到 401 且报 JWT/token 过期:自动刷新一次并重试该请求
+    //   _retried / skipRefresh 防止刷新请求自身递归
+    function _isAuthEndpoint(path){ return path.indexOf('/auth/v1/token')>=0 || path.indexOf('/auth/v1/logout')>=0; }
+    function _looksExpired(err){
+      const m = ((err&&err.message)||'').toLowerCase();
+      return m.includes('jwt expired') || m.includes('jwt') && m.includes('expired')
+          || m.includes('token is expired') || m.includes('invalid jwt') || m.includes('pgrst301');
+    }
+
+    async function rest(method, path, body, extraHeaders, _opts){
+      const opts0 = _opts || {};
+      // ① 预检:带登录态、非 auth 接口、token 即将过期 → 先刷新
+      if(!opts0.skipRefresh && !_isAuthEndpoint(path) && _session?.access_token
+         && _session.expires_at && Date.now() > _session.expires_at - 60000){
+        try{ await auth.refreshSession(); }catch(e){}
+      }
+
       const h = {...authHeaders(), ...(extraHeaders||{})};
       const opts = { method, headers: h };
       if(body !== undefined) opts.body = JSON.stringify(body);
@@ -201,12 +235,48 @@ window.supabase = (function(){
         }
         if(!r.ok){
           const msg = data?.message || data?.error_description || data?.msg || ('HTTP '+r.status);
-          return { data: null, error: { message: msg, status: r.status } };
+          const errObj = { message: msg, status: r.status };
+          // ② token 过期 → 刷新一次并重试(仅重试一次,且非 auth 接口)
+          if(!opts0._retried && !opts0.skipRefresh && !_isAuthEndpoint(path)
+             && (r.status===401 || _looksExpired(errObj)) && _session?.refresh_token){
+            const refreshed = await auth.refreshSession();
+            if(!refreshed.error){
+              return await rest(method, path, body, extraHeaders, {...opts0, _retried:true});
+            }
+          }
+          return { data: null, error: errObj };
         }
         return { data, error: null };
       }catch(e){
         return { data: null, error: { message: e.message || 'Network error' } };
       }
+    }
+
+    // v33.0.4.2:数据接口统一 fetch 包装(QueryBuilder/insert/upsert/update/delete 共用)
+    //   职责:① 预检 token 过期先刷新;② 401/JWT过期自动刷新并重试一次;
+    //         ③ 每次(含重试)都重新合并 authHeaders(),确保用的是最新 token。
+    //   extraHeaders 只放业务头(Prefer/Accept 等),不要放 Authorization。
+    async function dataFetch(path, { method='GET', extraHeaders={}, body }={}, _retried){
+      if(!_retried && _session?.access_token && _session.expires_at
+         && Date.now() > _session.expires_at - 60000){
+        try{ await auth.refreshSession(); }catch(e){}
+      }
+      const opts = { method, headers: { ...authHeaders(), ...extraHeaders } };
+      if(body !== undefined) opts.body = body;
+      const r = await fetch(url + path, opts);
+      let data=null;
+      try{ data = await r.json(); }catch(e){}
+      if(!r.ok){
+        const errObj = { message: data?.message||data?.hint||('HTTP '+r.status), code:data?.code||'', details:data?.details||'', status:r.status };
+        if(!_retried && (r.status===401 || _looksExpired(errObj)) && _session?.refresh_token){
+          const refreshed = await auth.refreshSession();
+          if(!refreshed.error){
+            return await dataFetch(path, { method, extraHeaders, body }, true);
+          }
+        }
+        return { ok:false, data, error: errObj };
+      }
+      return { ok:true, data, error:null };
     }
 
     // ── Auth ─────────────────────────────────────────────
@@ -347,17 +417,10 @@ window.supabase = (function(){
 
         async then(resolve, reject){
           try{
-            const h = { ...authHeaders() };
-            if(_single) h['Accept'] = 'application/vnd.pgrst.object+json';
-            const r = await fetch(url + buildUrl(), { headers: h });
-            let data = null;
-            try{ data = await r.json(); }catch(e){}
-            if(!r.ok){
-              const msg = data?.message || data?.hint || ('HTTP '+r.status);
-              resolve({ data: null, error: { message: msg, status: r.status } });
-              return;
-            }
-            resolve({ data, error: null });
+            const extra = {};
+            if(_single) extra['Accept'] = 'application/vnd.pgrst.object+json';
+            const res = await dataFetch(buildUrl(), { method:'GET', extraHeaders: extra });
+            resolve({ data: res.ok ? res.data : null, error: res.error });
           }catch(e){
             resolve({ data:null, error:{ message: e.message||'Network error' }});
           }
@@ -385,20 +448,14 @@ window.supabase = (function(){
             },
             async then(resolve){
               try{
-                const headers = authHeaders();
-                if(_wantSelect) headers['Prefer'] = 'return=representation';
-                const r = await fetch(url+`/rest/v1/${table}`, {
-                  method:'POST',
-                  headers,
-                  body: JSON.stringify(rows)
-                });
-                let data=null;
-                try{ data=await r.json(); }catch(e){}
-                if(!r.ok){
-                  resolve({ data:null, error:{ message: data?.message||('HTTP '+r.status), code: data?.code||'', details: data?.details||'' }});
+                const extra = {};
+                if(_wantSelect) extra['Prefer'] = 'return=representation';
+                const res = await dataFetch(`/rest/v1/${table}`, { method:'POST', extraHeaders: extra, body: JSON.stringify(rows) });
+                if(!res.ok){
+                  resolve({ data:null, error:{ message: res.error?.message||'HTTP error', code: res.error?.code||'', details: res.error?.details||'' }});
                   return;
                 }
-                resolve({ data: _wantSelect ? (data||[]) : null, error:null });
+                resolve({ data: _wantSelect ? (res.data||[]) : null, error:null });
               }catch(e){
                 resolve({ data:null, error:{ message: e.message||'Network error' }});
               }
@@ -420,22 +477,15 @@ window.supabase = (function(){
             },
             async then(resolve){
               try{
-                const headers = authHeaders();
-                // resolution=merge-duplicates 表示遇到冲突时合并(即 upsert)
-                headers['Prefer'] = (_wantSelect ? 'return=representation,' : '') + 'resolution=merge-duplicates';
+                const extra = {};
+                extra['Prefer'] = (_wantSelect ? 'return=representation,' : '') + 'resolution=merge-duplicates';
                 const path = `/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`;
-                const r = await fetch(url+path, {
-                  method:'POST',
-                  headers,
-                  body: JSON.stringify(rows)
-                });
-                let data=null;
-                try{ data=await r.json(); }catch(e){}
-                if(!r.ok){
-                  resolve({ data:null, error:{ message: data?.message||('HTTP '+r.status), code: data?.code||'', details: data?.details||'' }});
+                const res = await dataFetch(path, { method:'POST', extraHeaders: extra, body: JSON.stringify(rows) });
+                if(!res.ok){
+                  resolve({ data:null, error:{ message: res.error?.message||'HTTP error', code: res.error?.code||'', details: res.error?.details||'' }});
                   return;
                 }
-                resolve({ data: _wantSelect ? (data||[]) : null, error:null });
+                resolve({ data: _wantSelect ? (res.data||[]) : null, error:null });
               }catch(e){
                 resolve({ data:null, error:{ message: e.message||'Network error' }});
               }
@@ -459,20 +509,14 @@ window.supabase = (function(){
             async then(resolve){
               try{
                 const path = `/rest/v1/${table}?${_eqCol}=eq.${encodeURIComponent(_eqVal)}`;
-                const headers = authHeaders();
-                if(_wantSelect) headers['Prefer'] = 'return=representation';
-                const r = await fetch(url+path, {
-                  method:'PATCH',
-                  headers,
-                  body: JSON.stringify(body)
-                });
-                let data=null;
-                try{ data=await r.json(); }catch(e){}
-                if(!r.ok){
-                  resolve({ data:null, error:{ message: data?.message||('HTTP '+r.status), code: data?.code||'', details: data?.details||'' }});
+                const extra = {};
+                if(_wantSelect) extra['Prefer'] = 'return=representation';
+                const res = await dataFetch(path, { method:'PATCH', extraHeaders: extra, body: JSON.stringify(body) });
+                if(!res.ok){
+                  resolve({ data:null, error:{ message: res.error?.message||'HTTP error', code: res.error?.code||'', details: res.error?.details||'' }});
                   return;
                 }
-                resolve({ data: _wantSelect ? (data||[]) : null, error:null });
+                resolve({ data: _wantSelect ? (res.data||[]) : null, error:null });
               }catch(e){
                 resolve({ data:null, error:{ message: e.message||'Network error' }});
               }
@@ -495,22 +539,14 @@ window.supabase = (function(){
             async then(resolve){
               try{
                 const path = `/rest/v1/${table}?${_eqCol}=eq.${encodeURIComponent(_eqVal)}`;
-                const headers = authHeaders();
-                if(_wantSelect) headers['Prefer'] = 'return=representation';
-                const r = await fetch(url+path, {
-                  method:'DELETE',
-                  headers
-                });
-                if(!r.ok){
-                  let data=null;try{data=await r.json();}catch(e){}
-                  resolve({ data:null, error:{ message:data?.message||('HTTP '+r.status), code:data?.code||'' }});
+                const extra = {};
+                if(_wantSelect) extra['Prefer'] = 'return=representation';
+                const res = await dataFetch(path, { method:'DELETE', extraHeaders: extra });
+                if(!res.ok){
+                  resolve({ data:null, error:{ message: res.error?.message||'HTTP error', code: res.error?.code||'' }});
                   return;
                 }
-                let data = null;
-                if(_wantSelect){
-                  try{ data=await r.json(); }catch(e){}
-                }
-                resolve({ data: _wantSelect ? (data||[]) : null, error:null });
+                resolve({ data: _wantSelect ? (res.data||[]) : null, error:null });
               }catch(e){
                 resolve({ data:null, error:{ message:e.message||'Network error' }});
               }
@@ -638,17 +674,14 @@ window.supabase = (function(){
     // v30.0.2 新增:RPC(调用 Postgres 函数)
     async function rpc(fnName, params){
       try{
-        const r = await fetch(url+`/rest/v1/rpc/${fnName}`, {
+        const res = await dataFetch(`/rest/v1/rpc/${fnName}`, {
           method:'POST',
-          headers: authHeaders(),
           body: JSON.stringify(params||{})
         });
-        let data=null;
-        try{ data=await r.json(); }catch(e){}
-        if(!r.ok){
-          return { data:null, error:{ message: data?.message||('HTTP '+r.status), code: data?.code||'' }};
+        if(!res.ok){
+          return { data:null, error:{ message: res.error?.message||'HTTP error', code: res.error?.code||'' }};
         }
-        return { data, error:null };
+        return { data: res.data, error:null };
       }catch(e){
         return { data:null, error:{ message:e.message||'Network error' }};
       }
@@ -1478,7 +1511,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3.6.1 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3.6.2 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -12746,6 +12779,7 @@ supa.auth.onAuthStateChange(async(event,session)=>{
       document.getElementById('lg-pwd').value='';
       document.getElementById('lg-err').textContent='';
       unsubscribeRealtime();
+      try{ toast('登录已过期，请重新登录','info'); }catch(e){}
     }
   }
 });
