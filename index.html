@@ -3,13 +3,23 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0 (3.3.6.2 Beta)</title>
+<title>花花食界客户与任务管理系统 · v33.0 (3.3.6.3 Beta)</title>
 <!-- v31.0.2: 移除 Google Fonts(国内访问超时),改用系统字体回退 -->
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.4.3 修复(2026-06-09):添加部门成员失败"column id does not exist"
+    根因:department_members 表以 (department_id,user_id) 标识、无 id 列,
+      但前端 5 处 upsert 都没指定 on_conflict,PostgREST 默认按 id 判重 → 报错。
+    修复:5 处 upsert 均加 {onConflict:'department_id,user_id'}
+      (addMember / 改派自动入组 / saveTask 自动入组 / 设负责人 / 批量改派)。
+    ⚠ 配套 SQL(执行一次):migration_v33.0.4.3_deptmember_unique.sql
+      确保 (department_id,user_id) 上存在唯一约束(upsert on_conflict 的前提);
+      脚本会先去重再建约束,幂等。不执行则可能报"no unique constraint matching"。
+
   ══════════════════════════════════════════════════════════════════
   v33.0.4.2 修复(2026-06-09):JWT 过期导致操作失败(如"添加成员失败:JWT expired")
     根因:MiniSupabase 的 token 刷新只在 getSession() 被动触发,而数据
@@ -1511,7 +1521,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3.6.2 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3.6.3 Beta)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -4122,7 +4132,7 @@ async function applyBulkChangeAssignee(){
           department_id: t.departmentId,
           user_id:       newAssigneeId,
           role:          'member',
-        });
+        }, {onConflict:'department_id,user_id'});  // v33.0.4.3
         if(!mErr){autoJoinedDepts.add(t.departmentName||t.departmentId);}
       }
     }
@@ -4905,7 +4915,7 @@ async function saveTaskToDB(obj, existing){
         department_id: obj.departmentId,
         user_id:       obj.assigneeId,
         role:          'member',
-      });
+      }, {onConflict:'department_id,user_id'});  // v33.0.4.3
     }
   }
 
@@ -6399,7 +6409,7 @@ async function saveDept(){
         department_id: obj.id,
         user_id:       obj.leaderId,
         role:          'leader',
-      });
+      }, {onConflict:'department_id,user_id'});  // v33.0.4.3
     }else if(existsMembership.role!=='leader'){
       await supa.from('department_members').update({role:'leader'})
         .eq('department_id',obj.id).eq('user_id',obj.leaderId);
@@ -6501,7 +6511,7 @@ async function addMember(deptId){
   if(!userId){toast('请选择用户','err');return;}
   const {error} = await supa.from('department_members').upsert({
     department_id: deptId, user_id: userId, role,
-  });
+  }, {onConflict:'department_id,user_id'});  // v33.0.4.3:复合主键,该表无 id 列
   if(error){toast('添加失败:'+error.message,'err');return;}
   toast('已添加');
   await loadDepartmentMembers();
@@ -7515,7 +7525,7 @@ async function confirmAIImport(){
             department_id: taskObj.departmentId,
             user_id:       taskObj.assigneeId,
             role:          'member',
-          });
+          }, {onConflict:'department_id,user_id'});  // v33.0.4.3
         }
       }
       const row = taskToRow(taskObj);
