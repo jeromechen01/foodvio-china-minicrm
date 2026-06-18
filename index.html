@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.6 (PWA)</title>
+<title>花花食界客户与任务管理系统 · v33.0.7 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,22 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.7 新功能(2026-06-18):管理员强制重置用户密码(方案 B)
+    用户管理 → 用户列表每行(非自己)新增「🔑 重置密码」(仅 admin 可见)。
+    流程:admin 输入/生成临时密码 → 前端带 admin 自己的 token 调用
+      reset-password Edge Function → 函数内校验调用者确为 admin →
+      用 service_role 强制设密码 + 置 profiles.must_change_pwd=true →
+      admin 把临时密码告知员工 → 员工登录收到"请尽快修改密码"提醒(不强制),
+      自助改密后标记清除。
+    安全红线:service_role 仅存在于 Edge Function 服务端(平台自动注入
+      SUPABASE_SERVICE_ROLE_KEY),前端(本 HTML)永不接触;函数不盲信前端身份,
+      用调用者 token 反查 profiles.role 必须为 admin 方可执行。
+    ⚠ 必须配套:
+      1) 部署 Edge Function:reset-password(代码见 reset-password-edge-function.ts),
+         命令:supabase functions deploy reset-password --no-verify-jwt
+      2) 执行 SQL:migration_v33.0.7_must_change_pwd.sql(profiles 增 must_change_pwd 列)
+      3) bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.7'(否则更新提示不弹)
   ══════════════════════════════════════════════════════════════════
   v33.0.6 升级(2026-06-18):手机/平板触屏优化(UI)
     ① 所有文字与图标同比加大约 3 个字号(基础 14→17px,各组件按比例上调);
@@ -1625,7 +1641,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.6 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.7 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -3218,6 +3234,11 @@ async function doLogin(){
     // v31:登录后检查未接收任务,有则弹提示(每天一次)
     setTimeout(()=>showPendingTasksOnLogin(), 800);
 
+    // v33.0.7:密码曾被管理员重置 → 提醒尽快修改(不强制)
+    if(currentUser?.mustChangePwd){
+      setTimeout(()=>openConfirm('您的登录密码已被管理员重置为临时密码,为安全起见建议立即修改。现在去修改吗?', ()=>openChangePasswordModal()), 1300);
+    }
+
   }catch(e){
     btn.disabled=false;btn.textContent='登 录';
     errEl.textContent='登录异常：'+(e.message||'未知错误')+'（见调试日志）';
@@ -3336,6 +3357,8 @@ async function submitChangePassword(){
   }
 
   // 成功：退出登录，要求用新密码重新登录
+  // v33.0.7:清除"需改密"标记(自助改密后不再提醒)
+  try{ if(currentUser?.id) await supa.from('profiles').update({must_change_pwd:false}).eq('id', currentUser.id); }catch(e){}
   closeModal();
   toast('密码修改成功！请用新密码重新登录');
   setTimeout(async()=>{
@@ -9197,7 +9220,7 @@ function renderUsers(){
         <div class="acts" onclick="event.stopPropagation()">
           <button class="btn ${isIncomplete?'btn-p':''} btn-sm" onclick="openUserForm('${u.id}')">${isIncomplete?'补全':'编辑'}</button>
           ${u.id===currentUser?.id?`<span style="font-size:11px;color:var(--ms);padding:0 4px">当前</span>`:
-            `<button class="btn btn-d btn-sm" onclick="confirmDelUser('${u.id}')">禁用</button>`}
+            `<button class="btn btn-sm" onclick="openResetPwd('${u.id}')">🔑 重置密码</button><button class="btn btn-d btn-sm" onclick="confirmDelUser('${u.id}')">禁用</button>`}
         </div>
       </div>`;}).join('')}
   </div>
@@ -9216,6 +9239,77 @@ function renderUsers(){
 }
 
 let editingUserId=null;
+// ══════════════════════════════════════════════════════════
+// v33.0.7:管理员强制重置用户密码(方案 B)
+//   经 reset-password Edge Function 用 service_role 改密;
+//   service_role 只在云函数服务端,前端绝不接触。函数内校验调用者确为 admin。
+// ══════════════════════════════════════════════════════════
+function _genTempPwd(){
+  // 8 位,数字+大小写字母(去除易混淆字符 0/O/1/l/I)
+  const chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s=''; for(let i=0;i<8;i++) s+=chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function openResetPwd(userId){
+  if(!isAdmin()){ toast('仅管理员可重置密码','err'); return; }
+  const u=getUserById(userId);
+  if(!u){ toast('用户不存在','err'); return; }
+  if(userId===currentUser?.id){ toast('重置自己的密码请用右上角"🔑 修改密码"','info'); return; }
+  const pwd=_genTempPwd();
+  openModal('🔑 重置密码', `
+    <div class="form-grid">
+      <div class="fg full" style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:7px;padding:9px 12px;font-size:12px;color:#92400e;line-height:1.7">
+        将为 <strong>${h(u.name||u.email||'该用户')}</strong>${u.email?`（${h(u.email)}）`:''} 强制设置新的临时密码。<br>
+        重置后请把临时密码<strong>当面或通过微信告知本人</strong>,并提醒其登录后尽快修改。
+      </div>
+      <div class="fg full">
+        <label>临时密码（可手动修改,至少 6 位）</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="rp-pwd" type="text" value="${pwd}" style="flex:1;font-family:monospace;font-size:15px;letter-spacing:1px">
+          <button type="button" class="btn btn-sm" onclick="document.getElementById('rp-pwd').value=_genTempPwd()">🎲 重新生成</button>
+        </div>
+      </div>
+    </div>
+  `, `
+    <button class="btn" onclick="closeModal()">取消</button>
+    <button class="btn btn-p" onclick="doResetPwd('${userId}')">确认重置</button>
+  `);
+}
+async function doResetPwd(userId){
+  const pwd=(document.getElementById('rp-pwd')?.value||'').trim();
+  if(pwd.length<6){ toast('临时密码至少 6 位','err'); return; }
+  const u=getUserById(userId);
+  const btn=document.querySelector('.modal-ft .btn-p');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 重置中...'; }
+  try{
+    const tok=JSON.parse(sessionStorage.getItem('sb_vqfjmnugetnzngskgyvk_token')||'null');
+    const accessToken=tok?.access_token;
+    if(!accessToken) throw new Error('登录状态已失效,请重新登录');
+    const res=await fetch(`${SUPA_URL}/functions/v1/reset-password`,{
+      method:'POST',
+      headers:{ 'Authorization':`Bearer ${accessToken}`, 'apikey':SUPA_KEY, 'Content-Type':'application/json' },
+      body:JSON.stringify({ targetUserId:userId, newPassword:pwd }),
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || data.error){ throw new Error(data.error || ('HTTP '+res.status)); }
+    closeModal();
+    // 同步本地缓存的"需改密"标记(函数已在 DB 置位)
+    const lp=DB.profiles.find(p=>p.id===userId); if(lp) lp.mustChangePwd=true;
+    openModal('✅ 密码已重置', `
+      <div style="padding:6px 2px">
+        <div style="font-size:13px;color:var(--sl);margin-bottom:10px">已为 <strong>${h(u?.name||u?.email||'该用户')}</strong> 设置临时密码,请告知本人:</div>
+        <div style="display:flex;gap:8px;align-items:center;background:var(--sn);border:1px dashed var(--sv);border-radius:8px;padding:12px">
+          <span style="flex:1;font-family:monospace;font-size:20px;letter-spacing:2px;color:var(--ink)">${h(pwd)}</span>
+          <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${pwd}').then(()=>toast('已复制','ok')).catch(()=>{})">📋 复制</button>
+        </div>
+        <div style="font-size:12px;color:var(--ms);margin-top:10px;line-height:1.7">该员工下次登录会收到"请尽快修改密码"的提醒(不强制)。</div>
+      </div>
+    `, `<button class="btn btn-p" onclick="closeModal()">完成</button>`);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='确认重置'; }
+    toast('重置失败:'+(e.message||'未知错误'),'err');
+  }
+}
 function openUserForm(id){
   editingUserId=id;
   const u=id?DB.profiles.find(x=>x.id===id):null;
