@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.5 (3.3.6.3 Beta · PWA)</title>
+<title>花花食界客户与任务管理系统 · v33.0.6 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,17 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.6 升级(2026-06-18):手机/平板触屏优化(UI)
+    ① 所有文字与图标同比加大约 3 个字号(基础 14→17px,各组件按比例上调);
+    ② 提升协调性与美观度:更大圆角、更松留白、舒适行高;
+    ③ 触控适配:按钮/输入框≥44px 触控区、复选框放大、顺滑滚动、点击高亮,
+       输入框字号≥16px 防止 iOS 聚焦时页面自动缩放。
+    实现:在主样式表末尾追加一段 @media (max-width:1024px),(pointer:coarse)
+       增强块,仅在手机/平板/触屏生效,桌面鼠标端外观完全不变;纯追加,
+       不改任何既有 CSS 规则、不动 JS / MiniSupabase / RLS / PWA 逻辑。
+    ⚠ 发版必做:本次改了应用外壳,请同步把 sw.js 的 SW_VERSION bump 到
+       'huahua-crm-v33.0.6',否则浏览器不认 SW 变更、更新提示不弹、卡旧缓存。
   ══════════════════════════════════════════════════════════════════
   v33.0.5 升级(2026-06-18):PWA 化(可安装 / 可离线启动 / 可安全更新)
     新增静态边车文件(单文件铁律的必要例外 —— PWA 规范强制要求,SW 必须
@@ -1427,6 +1438,66 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
   .stat-card{padding:11px 12px}
   .stat-val{font-size:20px}
 }
+
+/* ═══════════════════════════════════════════════════════════
+   v33.0.6 — 手机/平板触屏优化(字号放大·协调美观·触控适配)
+   仅在触屏设备或窄屏(≤1024px)生效;桌面鼠标端不受影响。纯追加,不改既有规则。
+   排在所有既有移动端规则之后,确保覆盖生效。
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width:1024px),(pointer:coarse){
+  /* ① 整体字号同比加大约 3 个字号 */
+  html,body{font-size:17px;line-height:1.6}
+  .nav-item{font-size:16px;padding:12px 12px;gap:11px}
+  .nav-item.nav-sub{font-size:15.5px;padding:10px 12px 10px 14px}
+  .btn{font-size:16px}
+  .btn-sm{font-size:14px}
+  .tab{font-size:16px}
+  .msg-tabs button.msg-tab{font-size:16px}
+  .fsel{font-size:15px}
+  .srch input{font-size:16px}
+  .tbl-row{font-size:16px}
+  .tbl-hd{font-size:12.5px}
+  .co-n,.ct-n{font-size:14px}
+  .co-i,.ct-t{font-size:13px}
+  .stat-lbl{font-size:13px}
+  .stat-val{font-size:30px}
+  .stat-sub{font-size:13px}
+  .modal-ttl{font-size:18px}
+  .tl-card{font-size:15px}
+  .ss-opt{font-size:15px}
+  .pw h2{font-size:20px}
+  .pw h3{font-size:17px}
+  /* ② 图标放大 */
+  .stat-ico{font-size:26px}
+  .empty-st .ei{font-size:50px}
+  .msg-card-icon{width:50px;height:50px;font-size:25px}
+  .modal-cls{width:38px;height:38px;font-size:22px;border-radius:9px}
+  /* ③ 触控目标:按钮/输入≥44px;防 iOS 聚焦缩放(输入≥16px) */
+  .btn{min-height:44px;padding:10px 16px;touch-action:manipulation}
+  .btn-sm{min-height:38px;padding:8px 13px}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),
+  select,textarea{font-size:16px !important;min-height:44px}
+  textarea{min-height:80px}
+  input[type=checkbox],input[type=radio],.tbl-chk input[type=checkbox]{width:22px;height:22px}
+  .srch{padding:9px 13px}
+  .fsel{padding:9px 11px}
+  .acts{gap:8px}
+  .acts .btn-sm{min-height:40px;padding:8px 12px}
+  input[type=range].tsk-prog{height:26px}
+  /* ④ 协调与留白:更大圆角、更松间距、顺滑滚动 */
+  .stat-card{padding:16px 18px;border-radius:14px}
+  .stats-row{gap:13px}
+  .toolbar{padding:13px 14px;gap:9px;border-radius:13px}
+  .tbl-row{padding:14px 16px}
+  .tbl-card{border-radius:13px}
+  .tl-card{padding:14px 16px;border-radius:12px}
+  .msg-card{padding:16px;border-radius:13px}
+  .modal{border-radius:16px}
+  button,a,.nav-item,.tab,.tbl-row{-webkit-tap-highlight-color:rgba(22,163,74,.12)}
+}
+@media (max-width:480px){
+  .stats-row{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -1554,7 +1625,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.5 (3.3.6.3 Beta · PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.6 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
