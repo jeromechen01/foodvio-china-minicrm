@@ -3,13 +3,46 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0 (3.3.6.3 Beta)</title>
+<title>花花食界客户与任务管理系统 · v33.0.5 (3.3.6.3 Beta · PWA)</title>
+<!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
+<link rel="manifest" href="manifest.webmanifest"/>
+<meta name="theme-color" content="#16a34a"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="花花CRM"/>
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png"/>
+<!-- ===== /PWA ===== -->
 <!-- v31.0.2: 移除 Google Fonts(国内访问超时),改用系统字体回退 -->
 <!-- QRCode.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.5 升级(2026-06-18):PWA 化(可安装 / 可离线启动 / 可安全更新)
+    新增静态边车文件(单文件铁律的必要例外 —— PWA 规范强制要求,SW 必须
+      是独立同源 .js,不能内联/blob 注册;清单也独立避免子路径作用域坑):
+      · sw.js(Service Worker)
+      · manifest.webmanifest(PWA 清单)
+      · icons/icon-192.png / icon-512.png / icon-512-maskable.png / apple-touch-icon.png
+    全部应用代码(业务逻辑 / UI / MiniSupabase)仍只在本 HTML 内,未拆分、
+      未引入构建步骤、未新增运行时 CDN(QRCode.js 之外)。
+    红线(严格遵守):SW 绝不缓存/拦截 *.supabase.co(rest/auth/realtime)
+      与任何 AI 接口(DeepSeek/Claude/Gemini/豆包/千问…)——这些跨源请求一律
+      放行(直接 return,不 respondWith),杜绝陈旧数据与跨账号残留(N1 事故教训)。
+    仅缓存外壳:HTML 本体(network-first)、manifest/图标(cache-first)、
+      QRCode.js(stale-while-revalidate)。鉴权仍用 sessionStorage(每次启动
+      重新登录),策略不变。
+    更新机制:缓存名带 SW_VERSION,activate 清旧缓存;新版就绪由页面弹
+      "发现新版本",用户点"立即更新"才 skipWaiting + reload(不打断录入)。
+    ⚠ 发版必做:每次改 App 同步把 sw.js 的 SW_VERSION bump 到对应版本号
+      (如 huahua-crm-v33.0.6),否则浏览器不认 SW 变更,更新提示不触发。
+    ⚠ 部署:sw.js / manifest.webmanifest / icons/ 必须与 HTML 同目录(仓库
+      根 = /foodvio-china-minicrm/);Nginx 给 sw.js 设 Cache-Control: no-cache。
+
   ══════════════════════════════════════════════════════════════════
   v33.0.4.3 修复(2026-06-09):添加部门成员失败"column id does not exist"
     根因:department_members 表以 (department_id,user_id) 标识、无 id 列,
@@ -1521,7 +1554,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0 (3.3.6.3 Beta)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.5 (3.3.6.3 Beta · PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -12804,6 +12837,57 @@ supa.auth.onAuthStateChange(async(event,session)=>{
   }else{
     document.getElementById('login-page').classList.remove('hidden');
     hideLoading();
+  }
+})();
+</script>
+<!-- ===== PWA Service Worker 注册 + 更新提示(v33.0.5)===== -->
+<script>
+(function(){
+  if(!('serviceWorker' in navigator)) return;          // 旧浏览器/微信 X5 直接跳过
+  window.addEventListener('load', function(){
+    // 相对路径注册:作用域 = /foodvio-china-minicrm/(切勿写 '/sw.js')
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      function notify(worker){
+        if(!worker) return;
+        showUpdateBanner(function(){ worker.postMessage('SKIP_WAITING'); });
+      }
+      // 打开时已有等待中的新版本
+      if(reg.waiting && navigator.serviceWorker.controller){ notify(reg.waiting); }
+      // 运行中检测到新版本下载完成
+      reg.addEventListener('updatefound', function(){
+        var nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', function(){
+          if(nw.state==='installed' && navigator.serviceWorker.controller){ notify(nw); }
+        });
+      });
+    }).catch(function(){ /* 注册失败不影响 App 正常使用 */ });
+
+    // 新 SW 接管后自动刷新到新版(用户点了"立即更新"才会触发)
+    var refreshing=false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(refreshing) return; refreshing=true; window.location.reload();
+    });
+  });
+
+  function showUpdateBanner(onUpdate){
+    if(document.getElementById('pwa-update-banner')) return;
+    var b=document.createElement('div');
+    b.id='pwa-update-banner';
+    b.style.cssText='position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:2147483647;'
+      +'background:#0f172a;color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);'
+      +'display:flex;gap:12px;align-items:center;font-size:14px;max-width:92vw;'
+      +"font-family:'Microsoft YaHei','PingFang SC',sans-serif;";
+    var span=document.createElement('span'); span.textContent='发现新版本'; b.appendChild(span);
+    var btn=document.createElement('button'); btn.textContent='立即更新';
+    btn.style.cssText='background:#16a34a;color:#fff;border:0;border-radius:8px;padding:6px 14px;font-size:14px;cursor:pointer;';
+    btn.onclick=function(){ btn.disabled=true; btn.textContent='更新中…'; onUpdate(); };
+    b.appendChild(btn);
+    var later=document.createElement('button'); later.textContent='稍后';
+    later.style.cssText='background:transparent;color:#94a3b8;border:0;font-size:14px;cursor:pointer;';
+    later.onclick=function(){ b.remove(); };
+    b.appendChild(later);
+    document.body.appendChild(b);
   }
 })();
 </script>
