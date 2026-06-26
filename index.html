@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.7 (PWA)</title>
+<title>花花食界客户与任务管理系统 · v33.0.8 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,17 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.8 新功能(2026-06-18):AI 助理化 Batch1 — AI 速记(自然语言/语音录入)
+    定位升级第一步:把"录入"自动化,让员工少打字。
+    · 🎤 AI 速记跟进:跟进记录页 / 客户详情页,说一句话(支持语音)→ AI 抽取
+      客户/方式/要点/需求/下一步/下次日期 → 预览可编辑 → 确认入库。
+    · 🎤 AI 速记任务:我的任务/团队任务工具栏,说一句话 → AI 抽取
+      标题/说明/优先级/分类/关联客户/截止日 → 预览 → 确认创建(默认指派自己)。
+    · 共享地基:Web Speech API 语音输入(zh-CN,零 CDN)、单对象 JSON 容错解析、
+      客户名模糊匹配。全部"人在环中":AI 只整理,确认后才写库。
+    · 复用现有 saveFUToDB / saveTaskToDB / callAI / visibleCustomers,未改既有逻辑。
+    ⚠ 发版:bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.8'。
   ══════════════════════════════════════════════════════════════════
   v33.0.7 新功能(2026-06-18):管理员强制重置用户密码(方案 B)
     用户管理 → 用户列表每行(非自己)新增「🔑 重置密码」(仅 admin 可见)。
@@ -1641,7 +1652,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.7 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.8 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -3923,6 +3934,7 @@ function renderTaskList(mode='my'){
     ${(tFilter.q||tFilter.st||tFilter.pr||tFilter.cat||tFilter.dept||tFilter.assignee)?`<button class="btn btn-g btn-sm" onclick="resetTaskFilter()">× 清除</button>`:''}
     <button class="btn btn-sm" style="margin-left:auto" onclick="exportTasksToExcel()" title="导出当前筛选下的任务为 Excel">📥 导出</button>
     ${!useKanban && !useCalendar ? `<button class="btn btn-sm ${_taskBulkMode?'btn-p':''}" onclick="toggleTaskBulkMode()" title="进入/退出批量编辑模式">${_taskBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>` : ''}
+    ${mode!=='archive'?`<button class="btn btn-ai btn-sm" onclick="openAiQuickTask()" title="说一句话,AI 自动整理成任务">🎤 AI 速记</button>`:''}
     ${mode!=='archive'?`<button class="btn btn-ai btn-sm" onclick="openAIImportTasks()" title="从文本/Excel/Word 导入任务,AI 自动解析为结构化条目">🤖 AI 导入</button>`:''}
     ${mode!=='archive'?`<button class="btn btn-p btn-sm" onclick="openTaskForm(null)">+ 新建任务</button>`:''}
   </div>
@@ -9041,7 +9053,8 @@ function renderFollowups(){
     <input class="fsel" type="date" value="${fFilter.from}" onchange="fFilter.from=this.value;fFilter.page=1;refreshFU()" title="开始">
     <input class="fsel" type="date" value="${fFilter.to}" onchange="fFilter.to=this.value;fFilter.page=1;refreshFU()" title="结束">
     ${(fFilter.cust||fFilter.type||fFilter.by||fFilter.from||fFilter.to||fFilter.oc)?`<button class="btn btn-g btn-sm" onclick="fFilter={cust:'',type:'',by:'',from:'',to:'',oc:'',page:1};refreshFU()">× 清除</button>`:''}
-    <button class="btn btn-p btn-sm" style="margin-left:auto" onclick="openFUForm(null,'')">+ 新增跟进</button>
+    <button class="btn btn-ai btn-sm" style="margin-left:auto" onclick="openAiQuickFU('')" title="说一句话,AI 自动整理成跟进记录">🎤 AI 速记</button>
+    <button class="btn btn-p btn-sm" onclick="openFUForm(null,'')">+ 新增跟进</button>
   </div>
   ${paged.length===0?`<div class="tbl-card"><div class="empty-st"><div class="ei">📋</div><h3>暂无跟进记录</h3><p>点击"新增跟进"开始记录</p></div></div>`:`
   <div style="background:#fff;border-radius:var(--r);border:1px solid var(--sv);padding:16px 20px">
@@ -12578,6 +12591,7 @@ function openCustDetail(id){
     ${c.notes?`<div style="margin-bottom:14px;padding:10px 12px;background:#f0fdf4;border-radius:8px;border-left:3px solid var(--g)"><div style="font-size:10px;font-weight:700;color:var(--g);text-transform:uppercase;margin-bottom:4px">备注</div><div style="font-size:13px;color:var(--sl);line-height:1.65">${h(c.notes)}</div></div>`:''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
       <span style="font-size:13px;font-weight:600">跟进记录 (${cFU.length})</span>
+      <button class="btn btn-ai btn-sm" onclick="closeModal();openAiQuickFU('${id}')" title="说一句话,AI 自动整理成跟进记录">🎤 AI 速记</button>
       <button class="btn btn-p btn-sm" onclick="closeModal();openFUForm(null,'${id}')">+ 新增跟进</button>
     </div>
     ${cFU.length===0?`<div style="border:2px dashed var(--sv);border-radius:8px;padding:24px;text-align:center;color:var(--ms)"><div style="font-size:28px;margin-bottom:8px">📭</div>暂无跟进记录</div>`:`<div class="timeline">${cFU.map(f=>tlCard(f,false,false)).join('')}</div>`}
@@ -12860,6 +12874,247 @@ function _bindBackdropGuard(overlay, closeFn){
     if(e.target===overlay && downOnBackdrop){ closeFn(); }
   };
 }
+
+// ══════════════════════════════════════════════════════════
+// v33.0.8 Batch1 — AI 速记(自然语言/语音录入)+ 共享地基
+//   · 语音:浏览器原生 Web Speech API(zh-CN),零 CDN
+//   · 录入:callAI 抽取结构化 → 预览(可编辑)→ 确认入库(人在环中)
+//   · 复用现有 saveFUToDB / saveTaskToDB / visibleCustomers / openRaw
+// ══════════════════════════════════════════════════════════
+
+// —— 语音输入(切换 录音/停止),把识别文本写入指定 textarea ——
+let _aiRec = null;
+function aiVoiceToggle(targetId, btn){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ toast('当前浏览器不支持语音输入,请改用打字','err'); return; }
+  const ta = document.getElementById(targetId);
+  if(!ta) return;
+  if(_aiRec){ try{_aiRec.stop();}catch(e){} return; }   // 再点一次 = 停止
+  const rec = new SR();
+  rec.lang='zh-CN'; rec.interimResults=true; rec.continuous=true;
+  const base = ta.value ? ta.value + ' ' : '';
+  let finalTxt = '';
+  rec.onresult = (e)=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) finalTxt += r[0].transcript; else interim += r[0].transcript;
+    }
+    ta.value = base + finalTxt + interim;
+  };
+  const restore=()=>{ _aiRec=null; if(btn){btn.classList.remove('btn-d'); btn.textContent='🎤 语音';} };
+  rec.onerror = (e)=>{ if((e.error||'')!=='aborted') toast('语音识别出错:'+(e.error||''),'err'); restore(); };
+  rec.onend = restore;
+  try{ rec.start(); _aiRec=rec; if(btn){btn.classList.add('btn-d'); btn.textContent='⏹ 停止';} toast('请开始说话…','ok'); }
+  catch(e){ toast('无法启动语音:'+(e.message||''),'err'); _aiRec=null; }
+}
+
+// —— 解析单个 JSON 对象(容错 markdown 包裹/前后缀)——
+function _aiParseObj(text){
+  if(!text) return null;
+  let t=String(text).trim().replace(/^```(json)?/i,'').replace(/```$/,'').trim();
+  const i=t.indexOf('{'), j=t.lastIndexOf('}');
+  if(i>=0 && j>i) t=t.slice(i,j+1);
+  try{ return JSON.parse(t); }catch(e){ return null; }
+}
+
+// —— 把 AI 识别的客户名匹配到现有客户 ——
+function _aiMatchCustomer(name){
+  if(!name) return null;
+  const n=String(name).trim().toLowerCase();
+  if(!n) return null;
+  const cs=visibleCustomers();
+  return cs.find(c=>(c.companyName||'').toLowerCase()===n)
+      || cs.find(c=>{const cn=(c.companyName||'').toLowerCase(); return cn&&(cn.includes(n)||n.includes(cn));})
+      || cs.find(c=>(c.contactName||'').toLowerCase()===n)
+      || cs.find(c=>{const cn=(c.contactName||'').toLowerCase(); return cn&&n.includes(cn);})
+      || null;
+}
+
+// ───────────────────────── AI 速记跟进 ─────────────────────────
+function openAiQuickFU(defaultCid){
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">🎤 AI 速记跟进</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="fg full" style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:7px;padding:9px 12px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:10px">
+        用一句话说出或写下这次跟进,例如:<br>"刚跟<strong>XX公司</strong>张总通了电话,聊了报价,他说价格能接受,要下周开会定,让我周三再联系"。AI 会整理成跟进记录,你确认后入库。
+      </div>
+      <div class="fg full"><label>跟进内容(可语音)</label>
+        <textarea id="aifu-raw" rows="5" placeholder="说出或输入这次跟进的情况…" style="width:100%"></textarea>
+      </div>
+      <button class="btn btn-sm" onclick="aiVoiceToggle('aifu-raw',this)">🎤 语音</button>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" id="aifu-go" onclick="_aiQuickFUParse('${defaultCid||''}')">🤖 AI 整理</button>
+    </div>`, 620);
+  setTimeout(()=>document.getElementById('aifu-raw')?.focus(), 60);
+}
+async function _aiQuickFUParse(defaultCid){
+  const raw=(document.getElementById('aifu-raw')?.value||'').trim();
+  if(raw.length<4){ toast('请先说出或输入跟进内容','err'); return; }
+  const go=document.getElementById('aifu-go'); if(go){go.disabled=true;go.textContent='🤖 整理中…';}
+  const custList=visibleCustomers().slice(0,40).map(c=>c.companyName).filter(Boolean).join('、');
+  const sys=`你是客户跟进记录整理助手。把用户口述/输入的一段话整理成一条结构化跟进记录,输出**单个 JSON 对象**(非数组),无任何解释或 markdown。
+字段:
+- customerName: 客户/公司名(优先从已知客户中匹配:${custList||'(无)'};匹配不到就填你识别到的名字)
+- type: 跟进方式,从 [电话,拜访,微信,邮件,其他] 选一个(无法判断填"电话")
+- content: 这次跟进的要点(简洁清楚,1-3句)
+- demand: 客户需求/关注点(没有则留空字符串)
+- nextAction: 下一步要做的事(没有则留空字符串)
+- nextFollowUpDate: 下次跟进日期 YYYY-MM-DD(今天是 ${today()};"周三""下周"等相对时间换算成具体日期;没有则留空字符串)
+只输出这个 JSON 对象。`;
+  const result=await callAI({system:sys, prompt:'整理这段跟进:\n\n'+raw, maxTokens:700, _action:'quick_fu', _actionLabel:'AI速记跟进', _cost:1});
+  if(go){go.disabled=false;go.textContent='🤖 AI 整理';}
+  if(!result) return;
+  const o=_aiParseObj(result);
+  if(!o){ toast('AI 未能整理出结构,请换种说法重试','err'); return; }
+  _aiQuickFUPreview(o, defaultCid, raw);
+}
+function _aiQuickFUPreview(o, defaultCid, raw){
+  let cust = defaultCid ? DB.customers.find(c=>c.id===defaultCid) : null;
+  if(!cust) cust=_aiMatchCustomer(o.customerName);
+  const cs=visibleCustomers();
+  const custOpts=(cust?'':'<option value="">— 请选择客户 —</option>')+cs.map(c=>`<option value="${c.id}" ${cust&&cust.id===c.id?'selected':''}>${h(c.companyName||c.contactName||'(未命名)')}</option>`).join('');
+  const types=['电话','拜访','微信','邮件','其他'];
+  const typeVal=types.includes(o.type)?o.type:'电话';
+  closeModal();
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">✅ 确认跟进记录</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="fg full"><label>客户 *</label>
+        <select id="aifu-cu" class="fsel" style="width:100%">${custOpts}</select>
+        ${!cust&&o.customerName?`<div style="font-size:11px;color:#b45309;margin-top:3px">未自动匹配到"${h(o.customerName)}",请手动选择</div>`:''}
+      </div>
+      <div class="fg full"><label>跟进方式</label>
+        <select id="aifu-ty" class="fsel" style="width:100%">${types.map(t=>`<option ${t===typeVal?'selected':''}>${t}</option>`).join('')}</select>
+      </div>
+      <div class="fg full"><label>跟进内容 *</label><textarea id="aifu-co" rows="3" style="width:100%">${h(o.content||raw)}</textarea></div>
+      <div class="fg full"><label>客户需求</label><input id="aifu-dm" value="${h(o.demand||'')}" style="width:100%"></div>
+      <div class="fg full"><label>下一步行动</label><input id="aifu-na" value="${h(o.nextAction||'')}" style="width:100%"></div>
+      <div class="fg full"><label>下次跟进日期</label><input id="aifu-nd" type="date" value="${h(o.nextFollowUpDate||'')}" style="width:100%"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="openAiQuickFU('${defaultCid||''}')">← 重新输入</button>
+      <button class="btn btn-p" onclick="_aiQuickFUSave()">确认保存</button>
+    </div>`, 620);
+}
+async function _aiQuickFUSave(){
+  const cu=document.getElementById('aifu-cu')?.value||'';
+  const co=(document.getElementById('aifu-co')?.value||'').trim();
+  if(!cu){ toast('请选择客户','err'); return; }
+  if(!co){ toast('跟进内容不能为空','err'); return; }
+  const cust=DB.customers.find(c=>c.id===cu);
+  if(cust&&(cust.status==='暂停'||cust.status==='流失')){ toast(`该客户已${cust.status},无法新增跟进`,'err'); return; }
+  const btn=document.querySelector('.modal-ft .btn-p'); if(btn){btn.disabled=true;btn.textContent='保存中…';}
+  const obj={
+    id:gid(), customerId:cu,
+    type:document.getElementById('aifu-ty')?.value||'电话',
+    content:co, outcome:'无进展',
+    demand:(document.getElementById('aifu-dm')?.value||'').trim(),
+    nextAction:(document.getElementById('aifu-na')?.value||'').trim(),
+    nextActionProgress:'',
+    nextFollowUpDate:document.getElementById('aifu-nd')?.value||'',
+    createdBy:currentUser?.id||'', createdByName:currentUser?.name||'', createdAt:today(),
+  };
+  await saveFUToDB(obj);
+  if(btn){btn.disabled=false;btn.textContent='确认保存';}
+  closeModal();
+  toast('跟进记录已保存 ✓');
+}
+
+// ───────────────────────── AI 速记任务 ─────────────────────────
+function openAiQuickTask(){
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">🎤 AI 速记任务</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="fg full" style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:7px;padding:9px 12px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:10px">
+        用一句话说出或写下要做的事,例如:<br>"周五前把投标方案发给<strong>XX公司</strong>李总,标记重要"。AI 会整理成一条任务(默认指派给你自己;如需指派他人,请用"+ 新建任务"完整表单)。
+      </div>
+      <div class="fg full"><label>任务描述(可语音)</label>
+        <textarea id="aitk-raw" rows="4" placeholder="说出或输入要做的事…" style="width:100%"></textarea>
+      </div>
+      <button class="btn btn-sm" onclick="aiVoiceToggle('aitk-raw',this)">🎤 语音</button>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn btn-p" id="aitk-go" onclick="_aiQuickTaskParse()">🤖 AI 整理</button>
+    </div>`, 620);
+  setTimeout(()=>document.getElementById('aitk-raw')?.focus(), 60);
+}
+async function _aiQuickTaskParse(){
+  const raw=(document.getElementById('aitk-raw')?.value||'').trim();
+  if(raw.length<3){ toast('请先说出或输入任务内容','err'); return; }
+  const go=document.getElementById('aitk-go'); if(go){go.disabled=true;go.textContent='🤖 整理中…';}
+  const custList=visibleCustomers().slice(0,40).map(c=>c.companyName).filter(Boolean).join('、');
+  const sys=`你是任务整理助手。把用户口述/输入的一段话整理成**单个任务的 JSON 对象**,无解释或 markdown。
+字段:
+- title: 任务标题(简洁一句话,必填)
+- description: 详细说明(没有则留空字符串)
+- priority: 从 [urgent,high,normal,low] 选一个(无法判断填"normal")
+- category: 从 [销售,研发,运营,财务,行政,客户拓展,其他] 选一个(无法判断填"其他")
+- customerName: 关联客户(从已知客户匹配:${custList||'(无)'};匹配不到留空字符串)
+- dueDate: 截止日期 YYYY-MM-DD(今天是 ${today()};相对时间换算成具体日期;没有则留空字符串)
+只输出这个 JSON 对象。`;
+  const result=await callAI({system:sys, prompt:'整理这条任务:\n\n'+raw, maxTokens:600, _action:'quick_task', _actionLabel:'AI速记任务', _cost:1});
+  if(go){go.disabled=false;go.textContent='🤖 AI 整理';}
+  if(!result) return;
+  const o=_aiParseObj(result);
+  if(!o||!o.title){ toast('AI 未能整理出任务,请换种说法重试','err'); return; }
+  _aiQuickTaskPreview(o, raw);
+}
+function _aiQuickTaskPreview(o, raw){
+  const cust=_aiMatchCustomer(o.customerName);
+  const cs=visibleCustomers();
+  const custOpts=`<option value="">（不关联客户）</option>`+cs.map(c=>`<option value="${c.id}" ${cust&&cust.id===c.id?'selected':''}>${h(c.companyName||c.contactName||'(未命名)')}</option>`).join('');
+  const pris=[['urgent','紧急'],['high','高'],['normal','普通'],['low','低']];
+  const priVal=['urgent','high','normal','low'].includes(o.priority)?o.priority:'normal';
+  const cats=['销售','研发','运营','财务','行政','客户拓展','其他'];
+  const catVal=cats.includes(o.category)?o.category:'其他';
+  closeModal();
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">✅ 确认任务</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="fg full"><label>任务标题 *</label><input id="aitk-ti" value="${h(o.title||'')}" style="width:100%"></div>
+      <div class="fg full"><label>详细说明</label><textarea id="aitk-de" rows="2" style="width:100%">${h(o.description||'')}</textarea></div>
+      <div class="fg full"><label>优先级</label><select id="aitk-pr" class="fsel" style="width:100%">${pris.map(p=>`<option value="${p[0]}" ${p[0]===priVal?'selected':''}>${p[1]}</option>`).join('')}</select></div>
+      <div class="fg full"><label>分类</label><select id="aitk-ca" class="fsel" style="width:100%">${cats.map(c=>`<option ${c===catVal?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="fg full"><label>关联客户</label><select id="aitk-cu" class="fsel" style="width:100%">${custOpts}</select></div>
+      <div class="fg full"><label>截止日期 *</label><input id="aitk-du" type="date" value="${h(o.dueDate||'')}" style="width:100%"></div>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">指派给:<strong>${h(currentUser?.name||'我自己')}</strong>(如需指派他人,请用"+ 新建任务")</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="openAiQuickTask()">← 重新输入</button>
+      <button class="btn btn-p" onclick="_aiQuickTaskSave()">确认创建</button>
+    </div>`, 620);
+}
+async function _aiQuickTaskSave(){
+  const title=(document.getElementById('aitk-ti')?.value||'').trim();
+  const due=document.getElementById('aitk-du')?.value||'';
+  if(!title){ toast('任务标题不能为空','err'); return; }
+  if(!due){ toast('请填写截止日期','err'); return; }
+  const custId=document.getElementById('aitk-cu')?.value||null;
+  const cust=custId?DB.customers.find(c=>c.id===custId):null;
+  const btn=document.querySelector('.modal-ft .btn-p'); if(btn){btn.disabled=true;btn.textContent='创建中…';}
+  const obj={
+    id:uuid(), title,
+    description:(document.getElementById('aitk-de')?.value||'').trim(),
+    category:document.getElementById('aitk-ca')?.value||'其他',
+    priority:document.getElementById('aitk-pr')?.value||'normal',
+    status:'new', progress:0, stage:'', blockerReason:'',
+    startDate:null, dueDate:due, completedAt:null, archivedAt:null,
+    assigneeId:currentUser?.id, assignerId:currentUser?.id||null,
+    departmentId:null, customerId:custId||null, tags:'',
+    assigneeName:currentUser?.name||'', assignerName:currentUser?.name||'',
+    departmentName:'', customerName:cust?.companyName||'',
+    createdBy:currentUser?.id, createdByName:currentUser?.name||'',
+  };
+  await saveTaskToDB(obj, null);
+  if(btn){btn.disabled=false;btn.textContent='确认创建';}
+  closeModal();
+  toast(`"${obj.title}" 已创建 ✓`);
+}
+
 
 function openModal(title,body,footer){
   const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
