@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.14 (PWA)</title>
+<title>花花食界AI助理 · v33.0.15 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,19 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.15(2026-06-27):移动端优化 + 客户导入去重 + 短信归档(三件独立)
+    · 移动端(纯前端):字号在 v33.0.6 基础上再 +2(输入框 ≥16px 防缩放、触控 ≥44px);
+      顶栏第一行只保留 ☰菜单 / ⌘命令 / 用户pill(标题/图标/逾期提醒移动端隐藏);
+      客户/任务工具栏次要按钮收进「⋯ 更多」(.tb-more + .toolbar.show-more 切换,桌面端不受影响);
+      客户列表表格(.cust-tbl)移动端加宽 + 横向滚动,不再挤压。桌面端布局零改动。
+    · 客户 AI 导入去重(纯前端):入库前按「公司名 + 联系人」双字段规范化(去空格+忽略大小写)
+      全等判重 → 预览卡片标记「疑似重复」,逐条可选 覆盖更新(走 saveCustToDB 带现有 id)/ 跳过;
+      未命中正常新建。单字段相同不算重复。
+    · 短信归档(migration_v33.0.15_sms_archive.sql:sms_logs 加 archived/archived_at 两列):
+      短信记录页加复选框 + 「📦 批量归档」(定向 update),默认只显示未归档;
+      归档库新增「📨 短信归档」分区查看已归档;归档短信可逐条/批量「🗑 删除」(强确认、不可恢复、
+      硬删 RLS 限本人/admin)。仅加列、无新表(未碰新表四生命周期点)。
   ══════════════════════════════════════════════════════════════════
   v33.0.14(2026-06-27):任务附件 + AI 分析整理(多模态) — 纯前端,零 SQL,附件不持久化
     · 描述区「📎 添加」:任务新建/编辑表单可选本地图片 + 文档(.docx/.xlsx/.txt)。
@@ -1644,6 +1657,55 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
 @media (max-width:480px){
   .stats-row{grid-template-columns:1fr 1fr}
 }
+
+/* 桌面端默认隐藏「⋯ 更多」溢出按钮(仅移动端显示) */
+.tb-more-btn{display:none}
+
+/* ═══════════════════════════════════════════════════════════
+   v33.0.15 — 移动端再优化:字号再 +2 · 顶栏第一行三件 · 工具栏「⋯ 更多」溢出 · 客户表加宽
+   排在所有既有移动端规则之后,确保覆盖生效。仅追加,不改桌面端。
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width:1024px),(pointer:coarse){
+  /* ① 字号在 v33.0.6(+3)基础上再 +2 */
+  html,body{font-size:19px}
+  .nav-item{font-size:18px}
+  .nav-item.nav-sub{font-size:17px}
+  .btn{font-size:18px}
+  .btn-sm{font-size:16px}
+  .tab{font-size:18px}
+  .msg-tabs button.msg-tab{font-size:18px}
+  .fsel{font-size:17px}
+  .srch input{font-size:18px}
+  .tbl-row{font-size:18px}
+  .co-n,.ct-n{font-size:16px}
+  .co-i,.ct-t{font-size:15px}
+  .stat-lbl{font-size:15px}
+  .stat-val{font-size:32px}
+  .stat-sub{font-size:15px}
+  .modal-ttl{font-size:20px}
+  .tl-card{font-size:17px}
+  .ss-opt{font-size:17px}
+  .pw h2{font-size:22px}
+  .pw h3{font-size:19px}
+  /* 输入框 17px ≥16(防 iOS 聚焦缩放);触控 ≥44px 由 v33.0.6 规则保证 */
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),
+  select,textarea{font-size:17px !important}
+
+  /* ② 顶栏第一行只放三个:☰菜单 / ⌘命令 / 用户pill;页面标题/图标/逾期提醒在移动端隐藏 */
+  #topbar .tb-icon,#topbar .tb-title,#topbar .alert-pill{display:none !important}
+
+  /* ③ 工具栏「⋯ 更多」溢出:次要按钮(.tb-more)默认收起,点「⋯ 更多」展开 */
+  .tb-more-btn{display:inline-flex}
+  .toolbar .tb-more{display:none}
+  .toolbar.show-more .tb-more{display:inline-flex}
+
+  /* ④ 客户列表表格:加宽 + 横向滚动,不再挤压(.t-cols 为客户表专用,不影响任务表) */
+  .cust-tbl{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .cust-tbl .tbl-hd{display:grid}
+  .cust-tbl .tbl-hd,.cust-tbl .tbl-row{min-width:820px}
+  .cust-tbl .t-cols{grid-template-columns:1.8fr 1.3fr 1.1fr .7fr .8fr .9fr .8fr 90px}
+  .cust-tbl .t-cols-bulk{grid-template-columns:36px 1.8fr 1.3fr 1.1fr .7fr .8fr .9fr .8fr 90px}
+}
 </style>
 </head>
 <body>
@@ -1771,7 +1833,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.14 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.15 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -4111,10 +4173,11 @@ function renderTaskList(mode='my'){
       ${assigneeOpts.map(a=>`<option value="${a.id}" ${tFilter.assignee===a.id?'selected':''}>${h(a.name)}</option>`).join('')}
     </select>`:''}
     ${(tFilter.q||tFilter.st||tFilter.pr||tFilter.cat||tFilter.type||tFilter.dept||tFilter.assignee)?`<button class="btn btn-g btn-sm" onclick="resetTaskFilter()">× 清除</button>`:''}
-    <button class="btn btn-sm" style="margin-left:auto" onclick="exportTasksToExcel()" title="导出当前筛选下的任务为 Excel">📥 导出</button>
-    ${!useKanban && !useCalendar ? `<button class="btn btn-sm ${_taskBulkMode?'btn-p':''}" onclick="toggleTaskBulkMode()" title="进入/退出批量编辑模式">${_taskBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>` : ''}
-    ${mode!=='archive'?`<button class="btn btn-ai btn-sm" onclick="openAiQuickTask()" title="说一句话,AI 自动整理成任务">🎤 AI 速记</button>`:''}
-    ${mode!=='archive'?`<button class="btn btn-ai btn-sm" onclick="openAIImportTasks()" title="从文本/Excel/Word 导入任务,AI 自动解析为结构化条目">🤖 AI 导入</button>`:''}
+    <button class="btn btn-sm tb-more" style="margin-left:auto" onclick="exportTasksToExcel()" title="导出当前筛选下的任务为 Excel">📥 导出</button>
+    ${!useKanban && !useCalendar ? `<button class="btn btn-sm tb-more ${_taskBulkMode?'btn-p':''}" onclick="toggleTaskBulkMode()" title="进入/退出批量编辑模式">${_taskBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>` : ''}
+    ${mode!=='archive'?`<button class="btn btn-ai btn-sm tb-more" onclick="openAiQuickTask()" title="说一句话,AI 自动整理成任务">🎤 AI 速记</button>`:''}
+    ${mode!=='archive'?`<button class="btn btn-ai btn-sm tb-more" onclick="openAIImportTasks()" title="从文本/Excel/Word 导入任务,AI 自动解析为结构化条目">🤖 AI 导入</button>`:''}
+    <button class="btn btn-sm tb-more-btn" style="margin-left:auto" onclick="this.closest('.toolbar').classList.toggle('show-more')" title="更多操作">⋯ 更多</button>
     ${mode!=='archive'?`<button class="btn btn-p btn-sm" onclick="openTaskForm(null)">+ 新建任务</button>`:''}
   </div>
   ${viewBody}
@@ -5056,8 +5119,21 @@ async function onColDrop(e, targetStatus){
 refreshTasks = function(){
   if(curPage==='tasks')      document.getElementById('content').innerHTML=renderTaskList('my');
   else if(curPage==='teamTasks') document.getElementById('content').innerHTML=renderTaskList('team');
-  else if(curPage==='archive')   document.getElementById('content').innerHTML=renderTaskList('archive');
+  else if(curPage==='archive')   document.getElementById('content').innerHTML=renderArchivePage();
 };
+
+// v33.0.15:归档库页(任务归档 + 短信归档 两个分区)
+let _archiveTab = 'tasks';
+function refreshArchive(){ const el=document.getElementById('content'); if(el && curPage==='archive') el.innerHTML=renderArchivePage(); }
+function renderArchivePage(){
+  const tab = _archiveTab||'tasks';
+  const tabs = `<div class="pw" style="padding-bottom:0;margin-bottom:-6px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="tab ${tab==='tasks'?'active':''}" onclick="_archiveTab='tasks';selectedSmsIds.clear();refreshArchive()">📦 任务归档</button>
+      <button class="tab ${tab==='sms'?'active':''}" onclick="_archiveTab='sms';selectedSmsIds.clear();refreshArchive()">📨 短信归档</button>
+    </div></div>`;
+  return tabs + (tab==='sms' ? renderArchivedSms() : renderTaskList('archive'));
+}
 function resetTaskFilter(){
   const curView = tFilter.view;
   const curCalMonth = tFilter.calMonth;
@@ -8196,14 +8272,15 @@ function renderCustomers(){
       ${mgrs.map(m=>`<option value="${m}" ${cFilter.mgr===m?'selected':''}>${h(m)}</option>`).join('')}
     </select>`:''}
     ${(cFilter.q||cFilter.st||cFilter.lv||cFilter.mgr)?`<button class="btn btn-g btn-sm" onclick="cFilter={q:'',st:'',lv:'',mgr:'',page:1};refreshCustomers()">× 清除</button>`:''}
-    <button class="btn btn-sm" style="margin-left:auto" onclick="openCoolingList()" title="按未跟进天数列出降温客户(A级>7天 / 其余>14天),纯本地计算">❄️ 降温清单</button>
-    <button class="btn btn-ai btn-sm" onclick="aiAssessHealthBatch()" title="AI 批量评估可见(可编辑)客户的健康度并缓存">💗 批量评估</button>
-    <button class="btn btn-sm ${_custBulkMode?'btn-p':''}" onclick="toggleCustBulkMode()" title="进入/退出批量编辑模式">${_custBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>
-    <button class="btn btn-ai btn-sm" onclick="openAIImportCust()" title="从文本/Excel/Word 导入客户,AI 自动解析为结构化条目">🤖 AI 导入</button>
+    <button class="btn btn-sm tb-more" style="margin-left:auto" onclick="openCoolingList()" title="按未跟进天数列出降温客户(A级>7天 / 其余>14天),纯本地计算">❄️ 降温清单</button>
+    <button class="btn btn-ai btn-sm tb-more" onclick="aiAssessHealthBatch()" title="AI 批量评估可见(可编辑)客户的健康度并缓存">💗 批量评估</button>
+    <button class="btn btn-sm tb-more ${_custBulkMode?'btn-p':''}" onclick="toggleCustBulkMode()" title="进入/退出批量编辑模式">${_custBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>
+    <button class="btn btn-ai btn-sm tb-more" onclick="openAIImportCust()" title="从文本/Excel/Word 导入客户,AI 自动解析为结构化条目">🤖 AI 导入</button>
+    <button class="btn btn-sm tb-more-btn" style="margin-left:auto" onclick="this.closest('.toolbar').classList.toggle('show-more')" title="更多操作">⋯ 更多</button>
     <button class="btn btn-p btn-sm" onclick="openCustForm(null)">+ 新增客户</button>
   </div>
   ${bulkBar}
-  <div class="tbl-card">
+  <div class="tbl-card cust-tbl">
     <div class="tbl-hd ${colsClass}">${headerChk}<span>公司/行业</span><span>联系人</span><span>手机</span><span>级别</span><span>状态</span><span>最后跟进</span><span>负责人</span><span>操作</span></div>
     ${paged.length===0?`<div class="empty-st"><div class="ei">🔍</div><h3>暂无匹配客户</h3><p>尝试修改筛选，或新增客户</p></div>`:
       paged.map(c=>{const canEdit=canEditCustomer(c);
@@ -8606,30 +8683,117 @@ function visibleSmsLogs(){
   return logs.filter(l=> l.createdBy===currentUser?.id || managed.has(l.createdBy));
 }
 
+// v33.0.15:短信选中集合(短信页批量归档 / 归档库批量删除共用)
+let selectedSmsIds = new Set();
+function _toggleSmsSel(id){
+  if(selectedSmsIds.has(id)) selectedSmsIds.delete(id); else selectedSmsIds.add(id);
+  if(curPage==='smsLogs') refreshSmsLogs(); else refreshArchive();
+}
+// 共用短信卡片渲染(isArchived=true 时归档库视图,显示删除按钮)
+function _renderSmsCard(l, isArchived){
+  const when = (l.createdAt||'').replace('T',' ').slice(0,16);
+  const recs = Array.isArray(l.recipients)?l.recipients:[];
+  const names = recs.slice(0,10).map(r=>h(r.companyName||r.phone||'')).join('、');
+  const checked = selectedSmsIds.has(l.id);
+  return `<div class="tl-card ${checked?'row-checked':''}">
+    <div style="display:flex;gap:9px;align-items:flex-start">
+      <input type="checkbox" ${checked?'checked':''} onclick="_toggleSmsSel('${l.id}')" title="选中以批量${isArchived?'删除':'归档'}" style="margin-top:3px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="font-weight:600;font-size:13px">📨 群发短信 · ${l.recipientCount||recs.length} 个客户${isArchived?' <span class="bdg" style="background:#e5e7eb;color:#374151;font-size:10px">已归档</span>':''}</div>
+          <div style="font-size:11px;color:var(--ms);white-space:nowrap">${when}</div>
+        </div>
+        <div style="font-size:12px;color:var(--sl);margin:6px 0;line-height:1.6;white-space:pre-wrap">${h(l.content||'')}</div>
+        <div style="font-size:11px;color:var(--ms)">发送人:${h(l.createdByName||getUserName(l.createdBy))}</div>
+        <div style="font-size:11px;color:var(--ms);margin-top:3px">收件:${names}${recs.length>10?` 等 ${recs.length} 个`:''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">
+          <button class="btn btn-sm" style="padding:3px 9px;font-size:11px" onclick="openSmsLogDetail('${l.id}')">查看完整收件人</button>
+          ${isArchived?`<button class="btn btn-d btn-sm" style="padding:3px 9px;font-size:11px" onclick="deleteSms('${l.id}')">🗑 删除</button>`:''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderSmsLogs(){
-  const logs = visibleSmsLogs().slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  // 默认只显示未归档
+  const logs = visibleSmsLogs().filter(l=>l.archived!==true).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const selCount = logs.filter(l=>selectedSmsIds.has(l.id)).length;
   const body = logs.length===0
     ? `<div class="empty-st"><div class="ei">📨</div><h3>暂无短信记录</h3><p>在「客户列表」批量编辑中选中客户并群发短信后,记录会显示在这里</p></div>`
-    : `<div class="timeline">${logs.map(l=>{
-        const when = (l.createdAt||'').replace('T',' ').slice(0,16);
-        const recs = Array.isArray(l.recipients)?l.recipients:[];
-        const names = recs.slice(0,10).map(r=>h(r.companyName||r.phone||'')).join('、');
-        return `<div class="tl-card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-            <div style="font-weight:600;font-size:13px">📨 群发短信 · ${l.recipientCount||recs.length} 个客户</div>
-            <div style="font-size:11px;color:var(--ms);white-space:nowrap">${when}</div>
-          </div>
-          <div style="font-size:12px;color:var(--sl);margin:6px 0;line-height:1.6;white-space:pre-wrap">${h(l.content||'')}</div>
-          <div style="font-size:11px;color:var(--ms)">发送人:${h(l.createdByName||getUserName(l.createdBy))}</div>
-          <div style="font-size:11px;color:var(--ms);margin-top:3px">收件:${names}${recs.length>10?` 等 ${recs.length} 个`:''}</div>
-          <button class="btn btn-sm" style="margin-top:7px;padding:3px 9px;font-size:11px" onclick="openSmsLogDetail('${l.id}')">查看完整收件人</button>
-        </div>`;
-      }).join('')}</div>`;
+    : `<div class="timeline">${logs.map(l=>_renderSmsCard(l,false)).join('')}</div>`;
   return `<div class="pw">
-    ${!isAdmin()?`<div class="perm-banner">🔒 当前仅显示您${isLeader()?'及所辖成员':''}发送的短信记录（共 ${logs.length} 条）。</div>`:''}
-    <div class="toolbar"><div style="font-weight:600;font-size:14px">📨 短信记录</div><div style="font-size:12px;color:var(--sl);margin-left:8px">群发短信发送留痕 · 共 ${logs.length} 条</div></div>
+    ${!isAdmin()?`<div class="perm-banner">🔒 当前仅显示您${isLeader()?'及所辖成员':''}发送的短信记录（共 ${logs.length} 条未归档）。</div>`:''}
+    <div class="toolbar">
+      <div style="font-weight:600;font-size:14px">📨 短信记录</div>
+      <div style="font-size:12px;color:var(--sl);margin-left:8px">群发短信发送留痕 · 共 ${logs.length} 条未归档</div>
+      ${selCount>0?`<button class="btn btn-sm" style="margin-left:auto" onclick="archiveSelectedSms()">📦 批量归档(${selCount})</button>`:''}
+    </div>
     ${body}
   </div>`;
+}
+
+// 短信批量归档(定向 update archived=true)
+async function archiveSelectedSms(){
+  const ids = [...selectedSmsIds].filter(id=>{const l=(DB.smsLogs||[]).find(x=>x.id===id);return l && l.archived!==true;});
+  if(!ids.length){toast('请先勾选要归档的短信','err');return;}
+  let ok=0, fail=0;
+  for(const id of ids){
+    const {error}=await supa.from('sms_logs').update({archived:true, archived_at:new Date().toISOString()}).eq('id',id);
+    if(error){console.warn('[archiveSelectedSms]',error);fail++;}else ok++;
+  }
+  selectedSmsIds.clear();
+  await loadSmsLogs();
+  if(curPage==='smsLogs') refreshSmsLogs();
+  toast(`已归档 ${ok} 条短信${fail?`,失败 ${fail} 条`:''}`, fail?'err':'ok');
+}
+
+// 归档库 — 短信归档视图
+function renderArchivedSms(){
+  const logs = visibleSmsLogs().filter(l=>l.archived===true).slice().sort((a,b)=>String(b.archivedAt||b.createdAt||'').localeCompare(String(a.archivedAt||a.createdAt||'')));
+  const selCount = logs.filter(l=>selectedSmsIds.has(l.id)).length;
+  const body = logs.length===0
+    ? `<div class="empty-st"><div class="ei">📨</div><h3>暂无已归档短信</h3><p>在「短信记录」页勾选短信并「📦 批量归档」后,会出现在这里</p></div>`
+    : `<div class="timeline">${logs.map(l=>_renderSmsCard(l,true)).join('')}</div>`;
+  return `<div class="pw">
+    <div class="perm-banner arch-banner">📦 短信归档库:已归档的群发短信记录（共 ${logs.length} 条）。删除后<strong>不可恢复</strong>。</div>
+    <div class="toolbar">
+      <div style="font-weight:600;font-size:14px">📨 短信归档</div>
+      <div style="font-size:12px;color:var(--sl);margin-left:8px">共 ${logs.length} 条</div>
+      ${selCount>0?`<button class="btn btn-d btn-sm" style="margin-left:auto" onclick="deleteSelectedSms()">🗑 批量删除(${selCount})</button>`:''}
+    </div>
+    ${body}
+  </div>`;
+}
+
+// 硬删除单条短信(归档库,不可恢复;RLS 限本人/admin)
+function deleteSms(id){
+  openConfirm('确定删除这条短信记录?<br><strong style="color:#dc2626">删除后不可恢复。</strong>', async()=>{
+    closeModal();
+    const {error}=await supa.from('sms_logs').delete().eq('id',id);
+    if(error){toast('删除失败:'+error.message,'err');return;}
+    selectedSmsIds.delete(id);
+    await loadSmsLogs();
+    refreshArchive();
+    toast('短信记录已删除','err');
+  });
+}
+// 批量硬删除已归档短信
+async function deleteSelectedSms(){
+  const ids = [...selectedSmsIds].filter(id=>{const l=(DB.smsLogs||[]).find(x=>x.id===id);return l && l.archived===true;});
+  if(!ids.length){toast('请先勾选已归档短信','err');return;}
+  openConfirm(`确定删除选中的 ${ids.length} 条已归档短信?<br><strong style="color:#dc2626">删除后不可恢复。</strong>`, async()=>{
+    closeModal();
+    let ok=0, fail=0;
+    for(const id of ids){
+      const {error}=await supa.from('sms_logs').delete().eq('id',id);
+      if(error){console.warn('[deleteSelectedSms]',error);fail++;}else ok++;
+    }
+    selectedSmsIds.clear();
+    await loadSmsLogs();
+    refreshArchive();
+    toast(`已删除 ${ok} 条${fail?`,失败 ${fail} 条`:''}`,'err');
+  });
 }
 
 function openSmsLogDetail(id){
@@ -9161,11 +9325,37 @@ function openAIImportCustPreview(){
 }
 
 // 单卡片渲染
+// v33.0.15:客户导入去重 — 规范化(去首尾空格 + 忽略大小写)
+function _normCustKey(s){ return String(s||'').trim().toLowerCase(); }
+// 按「公司名 + 联系人」双字段全等判重(单字段相同不算);返回命中的现有客户或 null
+function _findDupCust(c){
+  const cn = _normCustKey(c.companyName);
+  if(!cn) return null;
+  const ct = _normCustKey(c.contactName);
+  return (DB.customers||[]).find(x=>_normCustKey(x.companyName)===cn && _normCustKey(x.contactName)===ct) || null;
+}
+// 设置某条草稿的重复处理方式(overwrite=覆盖更新 / skip=跳过)
+function _setImpCustDup(idx, val){
+  const c = _aiImportCustDraft[idx];
+  if(c) c._dupAction = val;
+}
+
 function _renderAIImpCustCard(c, idx){
   const INDUSTRIES = ['餐饮','商超','电商','食品加工','其他'];
   const LEVELS = ['A','B','C'];
   const STATUSES = ['活跃','跟进中','暂停','合作中','成交','流失'];
   const SOURCES = ['展会','转介绍','网络','电话开发','自拓','其他'];
+
+  // v33.0.15:疑似重复(公司名+联系人双字段全等)→ 默认覆盖,可改跳过
+  const dup = _findDupCust(c);
+  if(dup && c._dupAction===undefined) c._dupAction = 'overwrite';
+  const dupBanner = dup ? `<div style="margin:6px 0;padding:7px 10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;font-size:12px;color:#9a3412;line-height:1.6">
+      ⚠ <strong>疑似重复</strong>:已存在客户「${h(dup.companyName)} · ${h(dup.contactName||'无联系人')}」。
+      <select onchange="_setImpCustDup(${idx},this.value)" style="margin-left:6px;font-size:12px">
+        <option value="overwrite" ${c._dupAction!=='skip'?'selected':''}>覆盖更新现有客户</option>
+        <option value="skip" ${c._dupAction==='skip'?'selected':''}>跳过此条(不导入)</option>
+      </select>
+    </div>` : '';
 
   return `<div class="ai-imp-card ${c._skip?'skipped':''}" data-idx="${idx}">
     <div class="ai-imp-card-hd">
@@ -9174,6 +9364,7 @@ function _renderAIImpCustCard(c, idx){
       <input class="ai-imp-card-ttl" type="text" value="${h(c.companyName)}" placeholder="公司名称 *" oninput="updateAIImpCustField(${idx},'companyName',this.value)">
       <button class="btn btn-d btn-sm" onclick="removeAIImpCustRow(${idx})" style="padding:3px 8px;font-size:11px">删除</button>
     </div>
+    ${dupBanner}
     <div class="ai-imp-card-grid">
       <div class="ai-imp-fg">
         <label>联系人姓名</label>
@@ -9293,21 +9484,12 @@ async function confirmAIImportCust(){
     return;
   }
 
-  // 重复检测:同一公司名(或同手机号)已存在 → 提醒
-  const existingNames = new Set(DB.customers.map(c=>(c.companyName||'').trim()));
-  const existingPhones = new Set(DB.customers.map(c=>(c.phone||'').trim()).filter(Boolean));
-  const dupNames = todo.filter(c=>existingNames.has(c.companyName.trim()));
-  const dupPhones = todo.filter(c=>existingPhones.has(c.phone.trim()));
-  const dups = [...new Set([...dupNames, ...dupPhones])];
-  if(dups.length > 0){
-    const proceed = confirm(`检测到 ${dups.length} 条客户可能与现有数据重复(公司名或电话相同):\n\n${dups.slice(0,5).map(c=>`• ${c.companyName} (${c.phone})`).join('\n')}${dups.length>5?`\n... 另 ${dups.length-5} 条`:''}\n\n是否继续导入?\n(重复的客户会作为新条目入库,不会覆盖现有客户)`);
-    if(!proceed) return;
-  }
-
-  let ok=0, fail=0;
+  // v33.0.15:逐条按「公司名 + 联系人」双字段判重 — 命中且选「覆盖」走 saveCustToDB(带现有 id);
+  // 选「跳过」则不导入;未命中正常新建。逐条由用户在预览卡片确认,不再用统一 confirm 弹窗。
+  let ok=0, fail=0, overwritten=0, skippedDup=0;
   const total = todo.length;
   const failedItems = [];
-  const successIds = new Set();
+  const doneIds = new Set();   // 已处理(新建/覆盖/跳过)→ 从草稿移除,失败保留
   const btn = document.querySelector('.modal-ft .btn-p');
   if(btn){btn.disabled=true;btn.textContent=`⏳ 导入中 0/${total}...`;}
 
@@ -9315,8 +9497,14 @@ async function confirmAIImportCust(){
     const c = todo[i];
     if(btn) btn.textContent = `⏳ 导入中 ${i+1}/${total}...`;
 
+    const dup = _findDupCust(c);
+    // 命中重复且用户选择「跳过」
+    if(dup && (c._dupAction||'overwrite')==='skip'){
+      skippedDup++; doneIds.add(c._localId); continue;
+    }
+
     const custObj = {
-      id:            gid(),  // 客户 id 是 TEXT(v27 历史),不用 uuid()
+      id:            dup ? dup.id : gid(),   // 覆盖用现有 id;新建用新 gid(客户 id 是 TEXT)
       companyName:   c.companyName.trim(),
       contactName:   c.contactName||'',
       contactTitle:  c.contactTitle||'',
@@ -9330,37 +9518,47 @@ async function confirmAIImportCust(){
       source:        c.source,
       assignedTo:    c.assignedTo||currentUser?.name||'',
       notes:         c.notes||'',
-      createdBy:     currentUser?.id||null,
+      createdBy:     dup ? (dup.createdBy||currentUser?.id||null) : (currentUser?.id||null),
     };
 
-    try{
-      const row = custToRow(custObj);
-      const {error} = await supa.from('customers').insert({...row, created_at: new Date().toISOString()});
-      if(error){
-        console.error('[AI Import Cust] insert failed:', error, custObj);
-        failedItems.push({cust:c, reason: error.message||'未知错误'});
-        fail++;
-      }else{
-        successIds.add(c._localId);
-        ok++;
+    if(dup){
+      // 覆盖更新现有客户:复用 saveCustToDB(带现有 id → 走 update 分支)
+      try{
+        await saveCustToDB(custObj);
+        overwritten++; ok++; doneIds.add(c._localId);
+      }catch(e){
+        console.error('[AI Import Cust] overwrite failed:', e, custObj);
+        failedItems.push({cust:c, reason: e.message||'覆盖失败'}); fail++;
       }
-    }catch(e){
-      console.error('[AI Import Cust] exception:', e);
-      failedItems.push({cust:c, reason: e.message||'异常'});
-      fail++;
+    }else{
+      try{
+        const row = custToRow(custObj);
+        const {error} = await supa.from('customers').insert({...row, created_at: new Date().toISOString()});
+        if(error){
+          console.error('[AI Import Cust] insert failed:', error, custObj);
+          failedItems.push({cust:c, reason: error.message||'未知错误'});
+          fail++;
+        }else{
+          ok++; doneIds.add(c._localId);
+        }
+      }catch(e){
+        console.error('[AI Import Cust] exception:', e);
+        failedItems.push({cust:c, reason: e.message||'异常'});
+        fail++;
+      }
     }
   }
 
   await loadCustomers();
   if(curPage==='customers') refreshCustomers?.();
 
-  // 成功的从草稿移除,失败保留
-  _aiImportCustDraft = _aiImportCustDraft.filter(d=>!successIds.has(d._localId));
+  // 已处理的从草稿移除,失败保留
+  _aiImportCustDraft = _aiImportCustDraft.filter(d=>!doneIds.has(d._localId));
 
   if(fail === 0){
     closeModal();
     _aiImportCustDraft = [];
-    toast(`AI 导入完成:成功 ${ok} 条客户`);
+    toast(`AI 导入完成:新建 ${ok-overwritten} 条 · 覆盖 ${overwritten} 条${skippedDup?` · 跳过重复 ${skippedDup} 条`:''}`);
     return;
   }
 
@@ -9490,7 +9688,7 @@ function renderPage(p){
   else if(p==='tasks')c.innerHTML=renderTaskList('my');
   else if(p==='teamTasks')c.innerHTML=renderTaskList('team');
   else if(p==='taskFollow')c.innerHTML=renderTaskFollow();
-  else if(p==='archive')c.innerHTML=renderTaskList('archive');
+  else if(p==='archive')c.innerHTML=renderArchivePage();
   else if(p==='report')c.innerHTML=renderReportHub();
   else if(p==='users')c.innerHTML=renderUserManagementHub();
   else if(p==='ai')c.innerHTML=renderAISettings();
