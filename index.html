@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.9 (PWA)</title>
+<title>花花食界客户与任务管理系统 · v33.0.10 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,34 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.10 新功能(2026-06-27):AI 助理化 Batch3 — 判断(4 项新增 + 2 项复用)
+    定位升级第三步:把"判断/取舍"半自动化。全部"人在环中":简报/今日规划/降温
+    清单为只读输出(预览+复制,不写库不发送);健康度仅写客户自己档案的派生评分
+    字段,且必须用户点击触发,加载时绝不静默批量调 AI。
+    · 📋 AI 会前简报(只读):客户详情页新增,取客户档案+最近5条跟进+关联在办任务
+      → callAI 生成 ①客户快照 ②历史要点 ③可能诉求 ④沟通要点/议程 ⑤风险提示。
+      复用 _openAiOverlay / mdRender / _aiCopyText 展示+复制,不写库。
+    · 💗 AI 健康度评分(缓存到客户字段):客户详情「💗 AI 评估健康度」单评 + 客户列表
+      工具栏「💗 批量评估」。AI 输出严格 JSON{score,label,reasons},批量用数组 +
+      _parseAIJsonArray。写入走**独立定向 update**(health_score/label/reasons/
+      updated_at)+ .select() 做 RLS 静默失败检测,**不动 custToRow**(故正常编辑客户
+      不会冲掉已缓存评分)。只对可编辑客户调 AI/写库,不可编辑跳过提示。列表/详情读
+      DB.customers[].healthScore 显示分段配色徽章 + 评估时间;点击刷新,不自动算。
+    · ❄️ 降温清单(纯数据,零 AI 成本):客户管理页工具栏 + 仪表盘入口。D2 阈值 —
+      A 级 >7 天未跟进、其余 >14 天未跟进(未跟进天数=today−最近 followup.createdAt;
+      从无跟进直接列入并标"从未跟进")。按天数降序,每行「去跟进 / 起草话术
+      (复用 aiDraftFUScript)」;顶部可选「🤖 AI 帮我排优先级」(只读)。
+    · 🤖 今日规划(只读):仪表盘新增。聚合本人今日到期/逾期任务(isTaskParticipant)+
+      降温清单 Top + 今日相关会议 → callAI 生成按优先级与时间块的今日建议。复用
+      _openAiOverlay 预览 + _aiCopyText,不写库。
+    · 复用既有不重做:任务拆解 aiBreakdownTask、下一步行动 aiSuggestNextAction +
+      aiAnalyzeDemand;以及 callAI / _parseAIJsonArray / mdRender / today / weekRange /
+      visibleCustomers / isTaskParticipant / normTaskStatus / h() / Batch2 浮层与复制。
+    · SQL:migration_v33.0.10_customer_health.sql(仅给 customers 加 4 列,不新增表,
+      故未触发 emptyDB/loadCache/saveCache/Realtime 四生命周期点)。必须先在 Supabase
+      执行,再部署前端。零新 CDN、零新表。
+    ⚠ 发版:先在 Supabase 跑 SQL → bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.10'。
   ══════════════════════════════════════════════════════════════════
   v33.0.9 新功能(2026-06-27):AI 助理化 Batch2 — 起草(三个子功能,纯前端,零 schema 变更)
     定位升级第二步:把"想措辞/想怎么说"自动化,让员工少费脑。全部"人在环中":
@@ -1672,7 +1700,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.9 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.10 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -3755,7 +3783,11 @@ function renderDash(){
   <div class="exp-card" style="margin-top:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div style="font-size:14px;font-weight:700;color:var(--ink)">🤖 AI智能洞察</div>
-      <button id="ai-insight-btn" class="btn btn-ai btn-sm" onclick="aiDashboardInsight()">🤖 AI洞察</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="openCoolingList()" title="按未跟进天数列出降温客户">❄️ 降温清单</button>
+        <button class="btn btn-ai btn-sm" onclick="openTodayPlan()" title="AI 聚合今日到期/逾期任务+降温客户+今日会议,生成今日建议安排">🤖 今日规划</button>
+        <button id="ai-insight-btn" class="btn btn-ai btn-sm" onclick="aiDashboardInsight()">🤖 AI洞察</button>
+      </div>
     </div>
     <div id="ai-insight-box" style="min-height:48px;font-size:13px;color:var(--ms);display:flex;align-items:center;justify-content:center">
       点击「AI洞察」按钮，AI将分析当前销售数据并给出管理建议
@@ -7828,7 +7860,9 @@ function renderCustomers(){
       ${mgrs.map(m=>`<option value="${m}" ${cFilter.mgr===m?'selected':''}>${h(m)}</option>`).join('')}
     </select>`:''}
     ${(cFilter.q||cFilter.st||cFilter.lv||cFilter.mgr)?`<button class="btn btn-g btn-sm" onclick="cFilter={q:'',st:'',lv:'',mgr:'',page:1};refreshCustomers()">× 清除</button>`:''}
-    <button class="btn btn-sm ${_custBulkMode?'btn-p':''}" style="margin-left:auto" onclick="toggleCustBulkMode()" title="进入/退出批量编辑模式">${_custBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="openCoolingList()" title="按未跟进天数列出降温客户(A级>7天 / 其余>14天),纯本地计算">❄️ 降温清单</button>
+    <button class="btn btn-ai btn-sm" onclick="aiAssessHealthBatch()" title="AI 批量评估可见(可编辑)客户的健康度并缓存">💗 批量评估</button>
+    <button class="btn btn-sm ${_custBulkMode?'btn-p':''}" onclick="toggleCustBulkMode()" title="进入/退出批量编辑模式">${_custBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>
     <button class="btn btn-ai btn-sm" onclick="openAIImportCust()" title="从文本/Excel/Word 导入客户,AI 自动解析为结构化条目">🤖 AI 导入</button>
     <button class="btn btn-p btn-sm" onclick="openCustForm(null)">+ 新增客户</button>
   </div>
@@ -7854,7 +7888,7 @@ function renderCustomers(){
           </div>
         </div>
         <span><span class="bdg ${LV_CSS[c.customerLevel]||'bdg-C'}">${c.customerLevel}级</span></span>
-        <span><span class="bdg ${ST_CSS[c.status]||''}">${h(c.status)}</span></span>
+        <span><span class="bdg ${ST_CSS[c.status]||''}">${h(c.status)}</span>${_healthBadge(c,true)}</span>
         <span style="font-size:11px;color:${isOverdue(c)?'#dc2626':'var(--ms)'}">${isOverdue(c)?'⚠ ':''}${fd(c.updatedAt)}</span>
         <span style="font-size:12px;color:var(--sl);font-weight:500">${h(c.assignedTo||'—')}</span>
         <div class="acts" onclick="event.stopPropagation()">
@@ -12610,6 +12644,8 @@ function openCustDetail(id){
     <button class="tool-btn" onclick="generateQRCode('${id}')">📇 名片二维码</button>
     <button class="btn btn-ai btn-sm" onclick="aiCustomerAdvice('${id}')" id="ai-advice-btn-${id}">💡 AI建议</button>
     <button class="btn btn-ai btn-sm" onclick="aiDraftFUScript('${id}')" title="AI 起草可直接发出的跟进话术(正式/亲切/促单)">✍️ AI 起草话术</button>
+    <button class="btn btn-ai btn-sm" onclick="aiPreMeetingBrief('${id}')" title="AI 生成会前简报:快照/历史要点/可能诉求/沟通议程/风险">📋 AI 会前简报</button>
+    ${canEdit?`<button class="btn btn-ai btn-sm" id="health-btn-${id}" onclick="aiAssessHealthOne('${id}')" title="AI 评估客户健康度并缓存到档案">💗 AI 评估健康度</button>`:''}
   </div>
   <div id="ai-advice-${id}" style="display:none;padding:10px;background:#f5f3ff;border-radius:8px;margin-bottom:12px;border:1px solid #e9d5ff;font-size:12px"></div>`;
 
@@ -12623,6 +12659,7 @@ function openCustDetail(id){
           <span class="det-bdg">${c.customerLevel}级</span>
           <span class="det-bdg">${h(c.status)}</span>
           <span class="det-bdg">${cFU.length} 条跟进</span>
+          ${_healthBadge(c,false)}
         </div>
       </div>
       <button class="modal-cls" style="background:rgba(255,255,255,.15);color:#fff;border:none" onclick="closeModal()">×</button>
@@ -13495,6 +13532,399 @@ ${summary}`;
   const o=document.getElementById('rep-out'); if(o && repState.report) o.innerHTML=mdRender(repState.report);
   refreshReport();
   if(result) toast('🤖 我的周报已生成,可编辑后保存/导出','ai');
+}
+
+// ══════════════════════════════════════════════════════════
+// v33.0.10 Batch3 — 判断(会前简报 / 健康度评分 / 降温清单 / 今日规划)
+//   只读输出(简报/今日规划/降温)= 预览+复制,不写库不发送;
+//   健康度 = 用户点击触发,独立定向 update 写客户档案派生字段(不动 custToRow)。
+//   复用 callAI / _parseAIJsonArray / _aiParseObj / _openAiOverlay / _aiCopyText /
+//        mdRender / today / du / visibleCustomers / canEditCustomer / isTaskParticipant 等。
+// ══════════════════════════════════════════════════════════
+
+// 只读输出浮层共用的"当前文本"(供复制按钮取用,避免长文本进 onclick)
+let _aiReadoutText = '';
+function _aiCopyReadout(){ _aiCopyText(_aiReadoutText); }
+
+// ───────────────────────── 3-1 会前简报(只读)─────────────────────────
+async function aiPreMeetingBrief(custId){
+  const c = DB.customers.find(x=>x.id===custId);
+  if(!c){ toast('客户不存在','err'); return; }
+  const fus = DB.followups
+    .filter(f=>f.customerId===custId && canViewFollowup(f))
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    .slice(0,5);
+  const tasks = DB.tasks.filter(t=>t.customerId===custId && t.status!=='done' && t.status!=='archived');
+
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">📋 AI 会前简报</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body" style="text-align:center;padding:36px 20px;color:var(--ms)">
+      <div style="font-size:34px;margin-bottom:10px">🤖</div>
+      <div style="font-size:14px;font-weight:600;color:var(--sl)">正在为 ${h(c.companyName||c.contactName||'该客户')} 生成会前简报…</div>
+      <div class="dots" style="margin-top:12px"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>`, 680);
+
+  const hist = fus.length
+    ? fus.slice().reverse().map(f=>{
+        const ts=f.createdAt?String(f.createdAt).slice(0,10):'';
+        let l=`[${ts}][${f.type||'跟进'}] ${String(f.content||'').slice(0,120)}`;
+        if(f.demand) l+=` | 需求:${String(f.demand).slice(0,60)}`;
+        if(f.outcome) l+=` | 成果:${f.outcome}`;
+        if(f.nextAction) l+=` | 下一步:${String(f.nextAction).slice(0,60)}`;
+        return l;
+      }).join('\n')
+    : '(暂无历史跟进记录)';
+  const taskTxt = tasks.length
+    ? tasks.slice(0,8).map(t=>`- ${t.title}(${t.progress||0}% · ${TSK_STATUS[normTaskStatus(t.status)]?.label||t.status}${t.dueDate?' · 截止'+t.dueDate:''})`).join('\n')
+    : '(无关联在办任务)';
+
+  const sys='你是资深销售顾问,擅长在拜访/会谈前为客户经理快速准备"会前简报"。中文,markdown,条理清晰、实事求是、不编造未提供的信息。';
+  const prompt=`请基于以下信息,生成一份简洁实用的【会前简报】,包含 5 个部分:
+## 一、客户快照
+## 二、历史要点提炼
+## 三、可能诉求 / 关注点
+## 四、建议沟通要点 / 议程
+## 五、风险提示
+
+【客户档案】
+公司:${c.companyName||'—'} | 联系人:${c.contactName||'—'}${c.contactTitle?'('+c.contactTitle+')':''}
+级别:${c.customerLevel||'—'}级 | 状态:${c.status||'—'} | 行业:${c.industry||'—'} | 城市:${c.city||'—'}
+备注:${c.notes?String(c.notes).slice(0,120):'无'}
+
+【最近跟进(由旧到新)】
+${hist}
+
+【关联在办任务】
+${taskTxt}`;
+
+  const result = await callAI({system:sys, prompt, maxTokens:1200, _action:'premeeting_brief', _actionLabel:'会前简报', _cost:1});
+  if(!result){ _closeAiOverlay(); return; }   // callAI 失败已 toast
+  _aiReadoutText = result;
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">📋 会前简报 — ${h(c.companyName||c.contactName||'')}</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body">
+      <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:7px;padding:9px 12px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:12px">
+        以下简报由 AI 根据档案与跟进记录生成,仅供参考,请结合实际判断。本操作只读,不写入数据库。
+      </div>
+      <div class="rep-content" style="font-size:13px;line-height:1.8">${mdRender(result)}</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="_closeAiOverlay()">关闭</button>
+      <button class="btn btn-sm" onclick="_aiCopyReadout()">📋 复制</button>
+      <button class="btn btn-ai" onclick="aiPreMeetingBrief('${custId}')">🔄 重新生成</button>
+    </div>`, 720);
+}
+
+// ───────────────────────── 3-2 健康度评分(缓存到客户字段)─────────────────────────
+function _healthColor(s){
+  s=Number(s);
+  if(s>=80) return '#16a34a';
+  if(s>=60) return '#2563eb';
+  if(s>=40) return '#d97706';
+  return '#dc2626';
+}
+function _healthLabelOf(s){
+  s=Number(s);
+  if(s>=80) return '健康';
+  if(s>=60) return '一般';
+  if(s>=40) return '预警';
+  return '流失风险';
+}
+// 渲染健康度徽章(compact=true 给列表用小徽章;false 给详情用大徽章);无评分返回空串
+function _healthBadge(c, compact){
+  if(c.healthScore==null || c.healthScore==='') return '';
+  const s=Number(c.healthScore);
+  if(!Number.isFinite(s)) return '';
+  const col=_healthColor(s);
+  const lbl=h(c.healthLabel||_healthLabelOf(s));
+  const when=c.healthUpdatedAt?fd(c.healthUpdatedAt):'';
+  const tip=h(`健康度 ${s} ${c.healthLabel||_healthLabelOf(s)}${c.healthReasons?' · '+c.healthReasons:''}${when?' · 评估于 '+when:''}`);
+  if(compact) return `<span style="display:inline-block;margin-left:5px;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;color:#fff;background:${col}" title="${tip}">💗${s}</span>`;
+  return `<span class="det-bdg" style="background:${col};color:#fff" title="${tip}">💗 ${s} ${lbl}</span>`;
+}
+
+// 核心:对单个客户调 AI 评估并写库(独立定向 update + .select() RLS 检测,不动 custToRow)
+async function aiAssessHealth(custId){
+  const c = DB.customers.find(x=>x.id===custId);
+  if(!c){ toast('客户不存在','err'); return null; }
+  if(!canEditCustomer(c)){ toast('该客户只读,无权评估','err'); return null; }
+
+  const fus = DB.followups
+    .filter(f=>f.customerId===custId && canViewFollowup(f))
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    .slice(0,5);
+  const info = _coolingInfo(c);
+  const hist = fus.length
+    ? fus.slice().reverse().map(f=>`[${String(f.createdAt||'').slice(0,10)}][${f.type||''}] ${String(f.content||'').slice(0,90)} (成果:${f.outcome||'—'})`).join('\n')
+    : '(无跟进记录)';
+
+  const sys='你是客户成功分析师。请评估客户关系健康度,只输出**单个 JSON 对象**(非数组),无任何解释或 markdown:{"score":0-100整数,"label":"健康/一般/预警/流失风险 四选一","reasons":"不超过80字的中文理由"}。score 越高越健康;久未跟进、状态停滞、负面成果应降低分值。';
+  const prompt=`请评估以下客户的关系健康度,只输出 JSON 对象。
+公司:${c.companyName||'—'} | 级别:${c.customerLevel||'—'}级 | 状态:${c.status||'—'}
+最近跟进:${info.never?'从未跟进':(info.last+'('+info.days+'天前)')}
+最近跟进记录(由旧到新):
+${hist}`;
+
+  const result = await callAI({system:sys, prompt, maxTokens:400, _action:'health_score', _actionLabel:'健康度评估', _cost:1});
+  if(!result) return null;   // callAI 失败已 toast
+  const o = _aiParseObj(result);
+  if(!o || o.score==null){ toast('AI 未能给出评分,请重试','err'); return null; }
+  const score = Math.max(0, Math.min(100, parseInt(o.score,10)||0));
+  const label = String(o.label||_healthLabelOf(score)).slice(0,10);
+  const reasons = String(o.reasons||'').slice(0,200);
+
+  const {data,error} = await supa.from('customers')
+    .update({ health_score:score, health_label:label, health_reasons:reasons,
+              health_updated_at:new Date().toISOString() })
+    .eq('id', custId).select();   // 带 .select() 做 RLS 静默失败检测
+  if(error || !data?.length){ toast('评分保存失败(可能无权限)','err'); return null; }
+
+  // 同步本地缓存(snake→camel 对齐 loadCustomers)
+  const local = DB.customers.find(x=>x.id===custId);
+  if(local){
+    local.healthScore = score; local.healthLabel = label;
+    local.healthReasons = reasons; local.healthUpdatedAt = data[0].health_updated_at;
+  }
+  saveCache();
+  return {score, label, reasons};
+}
+
+// 客户详情页单个评估(按钮态 + 评估后刷新详情)
+async function aiAssessHealthOne(custId){
+  const btn = document.getElementById('health-btn-'+custId);
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 评估中…'; }
+  const r = await aiAssessHealth(custId);
+  if(btn){ btn.disabled=false; btn.textContent='💗 AI 评估健康度'; }
+  if(r){
+    toast(`健康度:${r.score} ${r.label}`,'ai');
+    closeModal(); openCustDetail(custId);   // 重开详情以显示新徽章
+  }
+}
+
+// 客户列表"批量评估"(仅可编辑客户,1 次 AI 调用返回数组)
+function aiAssessHealthBatch(){
+  const editable = visibleCustomers().filter(c=>canEditCustomer(c) && c.status!=='流失');
+  const total = visibleCustomers().length;
+  const skipped = total - editable.length;
+  if(!editable.length){ toast('当前没有可评估(可编辑)的客户','err'); return; }
+  const MAX = 20;   // 控成本:单次最多评估 20 个
+  const targets = editable.slice(0, MAX);
+  window._healthBatchTargets = targets.map(t=>t.id);
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">💗 批量评估客户健康度</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--sl);line-height:1.8">
+        将对 <b>${targets.length}</b> 个可编辑客户调用 AI 评估健康度并写入档案。
+        ${editable.length>MAX?`<div style="color:#b45309;margin-top:6px">共 ${editable.length} 个,本次先评估前 ${MAX} 个(按最近更新),其余可再次点击评估。</div>`:''}
+        ${skipped?`<div style="color:var(--ms);margin-top:6px">已跳过 ${skipped} 个不可编辑 / 已流失客户。</div>`:''}
+      </div>
+      <div style="margin-top:10px;padding:9px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e;line-height:1.7">
+        ⚠ 批量评估会消耗 AI 额度(约按 ${Math.max(2,Math.ceil(targets.length/5))} 次计),请勿频繁操作。结果只写入你有权限的客户。
+      </div>
+      <div id="health-batch-prog" style="display:none;margin-top:10px;font-size:13px;color:var(--ms)"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn btn-ai" id="health-batch-go" onclick="_doHealthBatch()">💗 开始评估</button>
+    </div>`, 560);
+}
+
+async function _doHealthBatch(){
+  const ids = window._healthBatchTargets || [];
+  const custs = ids.map(id=>DB.customers.find(c=>c.id===id)).filter(Boolean);
+  if(!custs.length){ closeModal(); return; }
+  const go = document.getElementById('health-batch-go');
+  const prog = document.getElementById('health-batch-prog');
+  if(go){ go.disabled=true; go.textContent='评估中…'; }
+  if(prog){ prog.style.display='block'; prog.textContent='🤖 正在调用 AI 评估,请稍候…'; }
+
+  const items = custs.map((c,i)=>{
+    const fus = DB.followups.filter(f=>f.customerId===c.id)
+      .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,3);
+    const info = _coolingInfo(c);
+    const hist = fus.length ? fus.map(f=>`${String(f.createdAt||'').slice(0,10)}[${f.type||''}]${String(f.content||'').slice(0,50)}(${f.outcome||'—'})`).join(' / ') : '无跟进';
+    return `#${i+1} 公司:${c.companyName||'—'} 级别:${c.customerLevel||'—'} 状态:${c.status||'—'} 最近跟进:${info.never?'从未':info.last+'('+info.days+'天前)'} 要点:${hist}`;
+  }).join('\n');
+
+  const sys='你是客户成功分析师。下面每行是一个客户(以 #序号 开头)。请为每个客户评估关系健康度,只输出**JSON 数组**,无解释或 markdown,每个元素为 {"i":行号整数,"score":0-100整数,"label":"健康/一般/预警/流失风险 四选一","reasons":"≤80字中文理由"}。数组长度需等于客户数。';
+  const result = await callAI({system:sys, prompt:items, maxTokens:4000, _action:'health_batch', _actionLabel:'批量健康度', _cost:Math.max(2,Math.ceil(custs.length/5))});
+  if(!result){ if(go){go.disabled=false;go.textContent='💗 开始评估';} if(prog) prog.textContent='评估失败,请重试'; return; }
+
+  let arr=[];
+  try{ const r=_parseAIJsonArray(result); arr = (r&&r.parsed)?r.parsed:[]; }catch(e){ arr=[]; }
+  if(!arr.length){ toast('AI 未返回有效评分','err'); if(go){go.disabled=false;go.textContent='💗 开始评估';} if(prog) prog.textContent='AI 返回内容无法解析,请重试'; return; }
+
+  let okN=0, failN=0;
+  for(const o of arr){
+    const idx = parseInt(o.i,10)-1;
+    const c = custs[idx];
+    if(!c || o.score==null) continue;
+    const score = Math.max(0, Math.min(100, parseInt(o.score,10)||0));
+    const label = String(o.label||_healthLabelOf(score)).slice(0,10);
+    const reasons = String(o.reasons||'').slice(0,200);
+    const {data,error} = await supa.from('customers')
+      .update({ health_score:score, health_label:label, health_reasons:reasons,
+                health_updated_at:new Date().toISOString() })
+      .eq('id', c.id).select();
+    if(error || !data?.length){ failN++; continue; }
+    const local = DB.customers.find(x=>x.id===c.id);
+    if(local){ local.healthScore=score; local.healthLabel=label; local.healthReasons=reasons; local.healthUpdatedAt=data[0].health_updated_at; }
+    okN++;
+    if(prog) prog.textContent=`已写入 ${okN}/${custs.length}…`;
+  }
+  saveCache();
+  closeModal();
+  toast(`健康度评估完成:成功 ${okN} 个${failN?`,失败 ${failN} 个(可能无权限)`:''}`,'ai');
+  if(curPage==='customers') refreshCustomers();
+}
+
+// ───────────────────────── 3-3 降温清单(纯数据,AI 可选)─────────────────────────
+// 计算某客户的"未跟进天数"(基于最近一条 followup 的 createdAt)
+function _coolingInfo(c){
+  const fus = DB.followups.filter(f=>f.customerId===c.id && f.createdAt);
+  if(!fus.length) return {days:Infinity, last:null, never:true};
+  let last = String(fus[0].createdAt);
+  for(const f of fus){ const cur=String(f.createdAt); if(cur>last) last=cur; }
+  const lastD = last.slice(0,10);
+  let days = -du(lastD);   // today - lastD(过去日期 du 为负)
+  if(days<0) days=0;
+  return {days, last:lastD, never:false};
+}
+// D2 阈值筛选:A 级 >7 天、其余 >14 天;从无跟进直接列入。按未跟进天数降序
+function _coolingCustomers(){
+  const vc = visibleCustomers().filter(c=>c.status!=='流失' && c.status!=='暂停');
+  const out=[];
+  vc.forEach(c=>{
+    const info=_coolingInfo(c);
+    const threshold = (c.customerLevel==='A') ? 7 : 14;
+    if(info.never || info.days>threshold){
+      out.push({c, days:info.days, last:info.last, never:info.never, threshold});
+    }
+  });
+  out.sort((a,b)=>b.days-a.days);
+  return out;
+}
+function openCoolingList(){
+  const list=_coolingCustomers();
+  const rows = list.length ? list.map(x=>{
+    const c=x.c;
+    const daysTxt = x.never ? '<span style="color:#dc2626;font-weight:700">从未跟进</span>' : `<span style="font-weight:700;color:${x.days>30?'#dc2626':'#d97706'}">${x.days} 天</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--sv)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:var(--ink);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${h(c.companyName||c.contactName||'(未命名)')}
+          <span class="bdg ${LV_CSS[c.customerLevel]||'bdg-C'}" style="margin-left:4px">${c.customerLevel}级</span>
+          ${_healthBadge(c,true)}
+        </div>
+        <div style="font-size:11px;color:var(--ms);margin-top:2px">最近跟进:${x.last?fd(x.last):'—'} · 未跟进 ${daysTxt} · 负责:${h(c.assignedTo||'—')}</div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="closeModal();openFUForm(null,'${c.id}')" title="去新增跟进">去跟进</button>
+      <button class="btn btn-ai btn-sm" onclick="aiDraftFUScript('${c.id}')" title="AI 起草跟进话术">✍️ 话术</button>
+    </div>`;
+  }).join('') : `<div style="text-align:center;padding:30px;color:var(--ms)"><div style="font-size:34px;margin-bottom:8px">✅</div>暂无降温客户,跟进很到位!</div>`;
+
+  openRaw(`
+    <div class="modal-hdr"><span class="modal-ttl">❄️ 降温清单(${list.length})</span><button class="modal-cls" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--ms);line-height:1.6">阈值:A 级 >7 天、其余 >14 天未跟进(已排除流失/暂停)。纯本地计算,零 AI 成本。</div>
+        ${list.length?`<button class="btn btn-ai btn-sm" id="cooling-ai-btn" onclick="aiCoolingPriority()" title="让 AI 按紧迫度给今日优先联系建议">🤖 AI 帮我排优先级</button>`:''}
+      </div>
+      <div id="cooling-ai-box" style="display:none;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:10px;font-size:13px;line-height:1.7"></div>
+      <div>${rows}</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal()">关闭</button>
+    </div>`, 720);
+}
+async function aiCoolingPriority(){
+  const list=_coolingCustomers();
+  if(!list.length){ toast('暂无降温客户','ok'); return; }
+  const btn=document.getElementById('cooling-ai-btn');
+  const box=document.getElementById('cooling-ai-box');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 分析中…'; }
+  if(box){ box.style.display='block'; box.innerHTML='<span style="color:var(--ms)">🤖 正在按紧迫度排优先级…</span>'; }
+  const summary=list.slice(0,30).map((x,i)=>`${i+1}. ${x.c.companyName||'—'}(${x.c.customerLevel}级,${x.never?'从未跟进':x.days+'天未跟进'},状态${x.c.status||'—'})`).join('\n');
+  const result=await callAI({
+    system:'你是销售主管,擅长按"价值×紧迫度"排客户联系优先级。简洁中文,可用 markdown,实事求是。',
+    prompt:`以下是久未跟进(降温)客户清单,请按"今天最该先联系谁"排序,最多列前 8 个并各给一句话理由,末尾给一句整体提醒:\n\n${summary}`,
+    maxTokens:800, _action:'cooling_priority', _actionLabel:'降温排优先级', _cost:1});
+  if(btn){ btn.disabled=false; btn.textContent='🤖 AI 帮我排优先级'; }
+  if(!result){ if(box) box.style.display='none'; return; }
+  if(box){ box.innerHTML=mdRender(result); }
+}
+
+// ───────────────────────── 3-4 今日规划(只读)─────────────────────────
+async function openTodayPlan(){
+  if(!currentUser){ toast('请先登录','err'); return; }
+  const td=today();
+  const active=t=>t.status!=='done' && t.status!=='archived';
+  const myTasks=DB.tasks.filter(t=>isTaskParticipant(t));
+  const dueToday=myTasks.filter(t=>active(t) && t.dueDate===td);
+  const overdue=myTasks.filter(t=>active(t) && t.dueDate && t.dueDate<td);
+  const cooling=_coolingCustomers().slice(0,8);
+  let meetings=[];
+  try{
+    meetings=(DB.messages||[]).filter(m=>m.type==='meeting_invite' && m.relatedMeetingData
+      && (m.toUser===currentUser.id || m.fromUser===currentUser.id)
+      && String(m.relatedMeetingData.startTime||'').slice(0,10)===td);
+  }catch(e){ meetings=[]; }
+
+  if(!dueToday.length && !overdue.length && !cooling.length && !meetings.length){
+    toast('今天没有到期/逾期任务、降温客户或会议,安排很轻松 🎉','ok');
+    return;
+  }
+
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">🤖 今日规划</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body" style="text-align:center;padding:36px 20px;color:var(--ms)">
+      <div style="font-size:34px;margin-bottom:10px">🗓️</div>
+      <div style="font-size:14px;font-weight:600;color:var(--sl)">正在为你规划今天…</div>
+      <div class="dots" style="margin-top:12px"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>`, 680);
+
+  const lines=[];
+  lines.push(`今天是 ${td}`);
+  lines.push('');
+  lines.push(`【今日到期任务】${dueToday.length} 个`);
+  dueToday.slice(0,15).forEach(t=>lines.push(`- ${t.title}(${TSK_PRIORITY[t.priority]?.label||t.priority} · ${TSK_STATUS[normTaskStatus(t.status)]?.label||t.status})`));
+  lines.push(`【逾期未完成任务】${overdue.length} 个`);
+  overdue.slice(0,15).forEach(t=>lines.push(`- ${t.title}(逾期 ${-du(t.dueDate)} 天 · ${TSK_PRIORITY[t.priority]?.label||t.priority})`));
+  lines.push(`【久未跟进(降温)客户 Top】${cooling.length} 个`);
+  cooling.forEach(x=>lines.push(`- ${x.c.companyName||'—'}(${x.c.customerLevel}级,${x.never?'从未跟进':x.days+'天未跟进'})`));
+  lines.push(`【今日相关会议】${meetings.length} 个`);
+  meetings.forEach(m=>{ const md=m.relatedMeetingData||{}; lines.push(`- ${md.title||m.title||'会议'} @ ${md.startTime||'今天'} ${md.location||''}`); });
+
+  let summary=lines.join('\n');
+  if(summary.length>8000) summary=summary.slice(0,8000)+'\n…(已截断)';
+
+  const sys='你是高效能个人助理,擅长把今天的待办整理成可执行的时间安排。中文,markdown,实事求是,不编造数据里没有的事项。';
+  const prompt=`请根据我今天的工作项,生成"今日建议安排":
+1. 先给「今日聚焦 Top 3」(最该今天搞定的)
+2. 再给上午 / 下午 / 傍晚 的时间块建议
+3. 明确标注必须今天完成的(逾期/今日到期)
+4. 末尾给一句简短鼓励
+
+以下是我今天的数据:
+
+${summary}`;
+
+  const result=await callAI({system:sys, prompt, maxTokens:1500, _action:'today_plan', _actionLabel:'今日规划', _cost:2});
+  if(!result){ _closeAiOverlay(); return; }   // callAI 失败已 toast
+  _aiReadoutText=result;
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">🤖 今日规划 · ${td}</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body">
+      <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:7px;padding:9px 12px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:12px">
+        以下为 AI 根据你今日任务/降温客户/会议生成的建议,仅供参考。本操作只读,不写入数据库。
+      </div>
+      <div class="rep-content" style="font-size:13px;line-height:1.8">${mdRender(result)}</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="_closeAiOverlay()">关闭</button>
+      <button class="btn btn-sm" onclick="_aiCopyReadout()">📋 复制</button>
+      <button class="btn btn-ai" onclick="openTodayPlan()">🔄 重新生成</button>
+    </div>`, 720);
 }
 
 
