@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.12 (PWA)</title>
+<title>花花食界AI助理 · v33.0.13 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,26 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.13(2026-06-27):任务体系升级 — 任务类型 + 责任人改名 + 执行人 + 指派强制发消息
+    · 任务类型(task_type):新增 TSK_TYPE=['全员跟进','一次性','日常运营','其他'],
+      与既有 category 职能分类并存。个人/团队任务表单加「类型」下拉,列表/看板/详情
+      显示类型徽章,列表工具栏加「类型」筛选(tFilter.type)。taskToRow 写 task_type,
+      snakeToCamel 自动转 taskType。
+    · 「负责人」→「责任人」(仅显示文案):任务表单标签 / 列表表头 / 详情字段 / 筛选器 /
+      导出列名 / 改派 UI / 消息模板 / AI 导入卡片;assigneeId/assigneeName 等标识符零改动。
+      部门管理「负责人(leader)」与客户「负责人(客户经理)」属不同概念,保持原称。
+    · 执行人(task_executors,新表):可选「个人」或「部门/项目组」,多选。新建/编辑表单
+      加可搜索多选控件(候选=全部活跃用户+全部部门)。saveTaskToDB 先删后写同步执行人
+      (Z1.1 教训)。新增 loadTaskExecutors()/DB.taskExecutors,接入 emptyDB/loadCache/
+      saveCache/Realtime 四点。详情页展示执行人(个人👤 / 部门🏢徽章)。
+    · 指派强制发消息(req3):保存时给「责任人 + 全部执行人(部门展开为成员)」发 task_assigned
+      消息;责任人是本人也照常通知执行人;排除自己、去重(责任人已通知则执行人环节跳过)、
+      只通知本次新增的执行人(编辑不刷屏);正文末尾「请在消息中心回复确认」。
+    · 权限/RLS(先于前端执行):task_executors RLS 镜像 task_assignees;扩展 is_task_member
+      识别执行人(个人 + 部门成员),并让 can_view_task 纳入 is_task_member,使协作者/执行人
+      均可查看任务并记录进展。前端 visibleTasks/myTasks/isTaskParticipant/canRecordProgress
+      同步加入执行人维度,与 RLS 语义一致。
   ══════════════════════════════════════════════════════════════════
   v33.0.12(2026-06-27):应用更名 +「命令栏催办」安全收口
     · 更名:应用显示名「花花食界客户与任务管理系统」→「花花食界AI助理」,覆盖
@@ -1733,7 +1753,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.12 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.13 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -1982,6 +2002,7 @@ function taskToRow(obj){
     title:            obj.title           || '',
     description:      obj.description     || '',
     category:         obj.category        || '其他',
+    task_type:        obj.taskType        || null,   /* v33.0.13:任务类型 */
     priority:         obj.priority        || 'normal',
     status:           obj.status          || 'new',
     progress:         Number(obj.progress)|| 0,
@@ -2059,10 +2080,10 @@ function showNetError(){
 // ── 内存缓存 DB
 // ══════════════════════════════════════════════════════════
 // v28 (2.0):新增 tasks / taskProgress / departments / departmentMembers
-let DB={customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[], smsLogs:[]};
+let DB={customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[], smsLogs:[], taskExecutors:[]};
 // N1 修复:统一的 DB 重置函数,确保所有表都被清空(避免用户切换时数据残留)
 function emptyDB(){
-  return {customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[], messages:[], taskAssignees:[], smsLogs:[]};
+  return {customers:[], followups:[], profiles:[], tasks:[], taskProgress:[], departments:[], departmentMembers:[], messages:[], taskAssignees:[], smsLogs:[], taskExecutors:[]};
 }
 let currentUser=null;
 
@@ -2167,11 +2188,13 @@ function visibleTasks(includeArchived=false){
     const myCollabTaskIds = new Set(
       (DB.taskAssignees||[]).filter(a=>a.userId===uid).map(a=>a.taskId)
     );
+    const myExecTaskIds = myExecutorTaskIds();  // v33.0.13:执行人维度
     list = list.filter(t=>(
          t.assigneeId===uid               // 接收者
       || t.assignerId===uid               // 指派者
       || t.createdBy ===uid               // 创建人
       || myCollabTaskIds.has(t.id)        // v32:作为协作者
+      || myExecTaskIds.has(t.id)          // v33.0.13:作为执行人(个人/部门成员)
       || (t.departmentId && myDeptIds.includes(t.departmentId))  // 任务挂在我管的部门下
       || managed.has(t.assigneeId)        // v33.0.3.5:负责人是我管辖的成员
       || managed.has(t.createdBy)         // v33.0.3.5:创建人是我管辖的成员
@@ -2188,10 +2211,12 @@ function myTasks(includeArchived=false){
   const myCollabTaskIds = new Set(
     (DB.taskAssignees||[]).filter(a=>a.userId===uid).map(a=>a.taskId)
   );
+  const myExecTaskIds = myExecutorTaskIds();  // v33.0.13:执行人维度
   let list = DB.tasks.filter(t=>
     t.assigneeId===uid
     || t.createdBy===uid          // v32:创建人始终是第一责任人,任务在我的列表显示
     || myCollabTaskIds.has(t.id)  // v32:协作者
+    || myExecTaskIds.has(t.id)    // v33.0.13:执行人
   );
   if(!includeArchived) list = list.filter(t=>t.status!=='archived');
   return list;
@@ -2222,12 +2247,28 @@ function visibleProgress(taskId){
 function getTaskAssignees(taskId){
   return (DB.taskAssignees||[]).filter(a=>a.taskId===taskId);
 }
+// v33.0.13:当前用户作为「执行人」(直接个人 OR 所在部门被设为执行人)的任务 id 集合
+function myExecutorTaskIds(){
+  if(!currentUser) return new Set();
+  const uid = currentUser.id;
+  const myDeptIds = new Set((DB.departmentMembers||[]).filter(m=>m.userId===uid).map(m=>m.departmentId));
+  return new Set((DB.taskExecutors||[]).filter(e=>
+    (e.executorType==='user' && e.executorId===uid) ||
+    (e.executorType==='department' && myDeptIds.has(e.executorId))
+  ).map(e=>e.taskId));
+}
+// v33.0.13:当前用户是否为某任务的执行人
+function isTaskExecutor(t){
+  if(!t||!currentUser) return false;
+  return myExecutorTaskIds().has(t.id);
+}
 // v32:判断当前用户是否为某任务的"参与方"(创建人/主/协作)
 function isTaskParticipant(t){
   if(!t||!currentUser) return false;
   if(t.createdBy===currentUser.id) return true;
   if(t.assigneeId===currentUser.id) return true;
-  return getTaskAssignees(t.id).some(a=>a.userId===currentUser.id);
+  if(getTaskAssignees(t.id).some(a=>a.userId===currentUser.id)) return true;
+  return isTaskExecutor(t);  // v33.0.13:执行人也是参与方
 }
 // v32:判断当前用户是否为主负责人(可以改派/关闭)
 function isTaskPrimary(t){
@@ -2252,7 +2293,8 @@ function canRecordProgress(t){
   if(!t||!currentUser) return false;
   if(canEditTask(t)) return true;
   // 协作者也可记录进展
-  return getTaskAssignees(t.id).some(a=>a.userId===currentUser.id);
+  if(getTaskAssignees(t.id).some(a=>a.userId===currentUser.id)) return true;
+  return isTaskExecutor(t);  // v33.0.13:执行人也可记录进展
 }
 function canDeleteTask(t){
   if(!t||!currentUser) return false;
@@ -2279,7 +2321,8 @@ function saveCache(){
     tasks:DB.tasks,taskProgress:DB.taskProgress,
     departments:DB.departments,departmentMembers:DB.departmentMembers,
     messages:DB.messages,taskAssignees:DB.taskAssignees,  /* v32.2 修复 R2.2:补全两张新表 */
-    smsLogs:DB.smsLogs  /* v33.0.4:群发短信记录 */
+    smsLogs:DB.smsLogs,  /* v33.0.4:群发短信记录 */
+    taskExecutors:DB.taskExecutors  /* v33.0.13:执行人 */
   }));}catch(e){}
 }
 function loadCache(){
@@ -2297,6 +2340,7 @@ function loadCache(){
     DB.messages=d.messages||[];                /* v32.2 */
     DB.taskAssignees=d.taskAssignees||[];      /* v32.2 */
     DB.smsLogs=d.smsLogs||[];                  /* v33.0.4 */
+    DB.taskExecutors=d.taskExecutors||[];      /* v33.0.13 */
     return true;
   }catch(e){return false;}
 }
@@ -2421,6 +2465,21 @@ async function loadTaskAssignees(){
   }else{
     console.warn('[loadTaskAssignees]', error);
   }
+}
+
+// v33.0.13:加载 task_executors(任务执行人:个人 / 部门·项目组)
+async function loadTaskExecutors(){
+  const {data, error} = await supa.from('task_executors').select('*');
+  if(!error){
+    DB.taskExecutors = (data||[]).map(snakeToCamel);
+    saveCache();
+  }else{
+    console.warn('[loadTaskExecutors]', error);
+  }
+}
+// 获取某任务的全部执行人记录
+function getTaskExecutors(taskId){
+  return (DB.taskExecutors||[]).filter(e=>e.taskId===taskId);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2630,7 +2689,7 @@ async function acceptTask(taskId){
   const isCollab = !!myCollabRec;
 
   if(!isPrimary && !isCollab){
-    toast('你不是这个任务的负责人','err');
+    toast('你不是这个任务的责任人','err');
     return;
   }
 
@@ -2674,7 +2733,7 @@ async function acceptTask(taskId){
   // - 主负责人接收 → 通知 assignerId(原指派方)
   // - 协作者接收 → 通知 myCollabRec.addedBy(把他加进来的人,通常是创建人或改派人)
   const notifyTo = isPrimary ? t.assignerId : myCollabRec.addedBy;
-  const myRole = isPrimary ? '主负责人' : '协作负责人(第二责任人)';
+  const myRole = isPrimary ? '主责任人' : '协作责任人(第二责任人)';
 
   if(notifyTo && notifyTo !== uid){
     sendMessage({
@@ -2805,7 +2864,7 @@ let _reassignSearch = '';
 function openReassignForm(taskId){
   const t = DB.tasks.find(x=>x.id===taskId);
   if(!t){toast('任务不存在','err');return;}
-  if(!canReassignTask(t)){toast('只有创建人/主负责人/管理员可以改派','err');return;}
+  if(!canReassignTask(t)){toast('只有创建人/主责任人/管理员可以改派','err');return;}
   _reassignSearch = '';
   renderReassignForm(taskId);
 }
@@ -2846,7 +2905,7 @@ function renderReassignForm(taskId, preservedChecked){
             <b>${h(p.name||p.email||'(未命名)')}</b>
             ${p.email?`<span style="font-size:11px;color:var(--ms);margin-left:6px">${h(p.email)}</span>`:''}
           </span>
-          ${isChecked?`<span class="bdg" style="background:${isPrimary?'#16a34a':'#3b82f6'};color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">${isPrimary?'主负责人':'已添加'}</span>`:''}
+          ${isChecked?`<span class="bdg" style="background:${isPrimary?'#16a34a':'#3b82f6'};color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">${isPrimary?'主责任人':'已添加'}</span>`:''}
         </label>`;
       }).join('');
 
@@ -2935,7 +2994,7 @@ async function doReassign(taskId, fnName, btn){
           toUser: c.id,
           type: 'task_assigned',
           title: `[任务协作] ${t.title||''}`,
-          content: `${currentUser?.name||'某人'} 把你添加为任务「${t.title||''}」的协作负责人(第二责任人)。\n创建人(第一责任人):${h(t.createdByName||'(未知)')}\n请查看任务详情。`,
+          content: `${currentUser?.name||'某人'} 把你添加为任务「${t.title||''}」的协作责任人(第二责任人)。\n创建人(第一责任人):${h(t.createdByName||'(未知)')}\n请查看任务详情。`,
           relatedTaskId: taskId,
         });
         notifiedCount++;
@@ -3248,6 +3307,8 @@ async function loadAllData(){
   await loadMessages();
   // v32:加载任务多负责人映射
   await loadTaskAssignees();
+  // v33.0.13:加载任务执行人映射
+  await loadTaskExecutors();
   // v33.0.4:加载群发短信记录
   await loadSmsLogs();
 }
@@ -3528,6 +3589,9 @@ function subscribeRealtime(){
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'task_assignees'},
       ()=>loadTaskAssignees()
+    )
+    .on('postgres_changes',{event:'*',schema:'public',table:'task_executors'},
+      ()=>loadTaskExecutors()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'sms_logs'},
       ()=>loadSmsLogs()
@@ -3862,11 +3926,13 @@ const TSK_PRIORITY = {
   low:    {label:'低',   dot:'pri-low',    bdg:'pri-bdg-low'},
 };
 const TSK_CATEGORY  = ['销售','研发','运营','财务','行政','客户拓展','其他'];
+// v33.0.13:任务类型(新维度,区别于既有 category 职能分类)
+const TSK_TYPE      = ['全员跟进','一次性','日常运营','其他'];
 const TSK_STATUS_KEYS   = ['new','in_progress','slow','ahead','done'];
 const TSK_PRIORITY_KEYS = ['urgent','high','normal','low'];
 
 // 任务列表筛选器(支持 my / team / archive 三种视图,以及 list / kanban / calendar 三种展示模式)
-let tFilter = {q:'', st:'', pr:'', cat:'', dept:'', assignee:'', page:1, view:'list', calMonth:''};
+let tFilter = {q:'', st:'', pr:'', cat:'', type:'', dept:'', assignee:'', page:1, view:'list', calMonth:''};
 const TPS = 12; // 每页任务数
 
 // UUID 生成器 - tasks 表 id 是 UUID 类型,不能用 gid()
@@ -3931,6 +3997,7 @@ function renderTaskList(mode='my'){
     if(tFilter.st  && t.status!==tFilter.st) return false;
     if(tFilter.pr  && t.priority!==tFilter.pr) return false;
     if(tFilter.cat && t.category!==tFilter.cat) return false;
+    if(tFilter.type && (t.taskType||'')!==tFilter.type) return false;
     if(tFilter.dept && t.departmentId!==tFilter.dept) return false;
     if(tFilter.assignee && t.assigneeId!==tFilter.assignee) return false;
     return true;
@@ -4013,15 +4080,19 @@ function renderTaskList(mode='my'){
       <option value="" ${!tFilter.cat?'selected':''}>全部分类</option>
       ${TSK_CATEGORY.map(c=>`<option value="${c}" ${tFilter.cat===c?'selected':''}>${c}</option>`).join('')}
     </select>
+    <select class="fsel" onchange="tFilter.type=this.value;tFilter.page=1;refreshTasks()">
+      <option value="" ${!tFilter.type?'selected':''}>全部类型</option>
+      ${TSK_TYPE.map(c=>`<option value="${c}" ${tFilter.type===c?'selected':''}>${c}</option>`).join('')}
+    </select>
     ${deptOpts.length?`<select class="fsel" onchange="tFilter.dept=this.value;tFilter.page=1;refreshTasks()">
       <option value="" ${!tFilter.dept?'selected':''}>全部部门</option>
       ${deptOpts.map(d=>`<option value="${d.id}" ${tFilter.dept===d.id?'selected':''}>${h(d.name)}</option>`).join('')}
     </select>`:''}
     ${assigneeOpts.length?`<select class="fsel" onchange="tFilter.assignee=this.value;tFilter.page=1;refreshTasks()">
-      <option value="" ${!tFilter.assignee?'selected':''}>全部负责人</option>
+      <option value="" ${!tFilter.assignee?'selected':''}>全部责任人</option>
       ${assigneeOpts.map(a=>`<option value="${a.id}" ${tFilter.assignee===a.id?'selected':''}>${h(a.name)}</option>`).join('')}
     </select>`:''}
-    ${(tFilter.q||tFilter.st||tFilter.pr||tFilter.cat||tFilter.dept||tFilter.assignee)?`<button class="btn btn-g btn-sm" onclick="resetTaskFilter()">× 清除</button>`:''}
+    ${(tFilter.q||tFilter.st||tFilter.pr||tFilter.cat||tFilter.type||tFilter.dept||tFilter.assignee)?`<button class="btn btn-g btn-sm" onclick="resetTaskFilter()">× 清除</button>`:''}
     <button class="btn btn-sm" style="margin-left:auto" onclick="exportTasksToExcel()" title="导出当前筛选下的任务为 Excel">📥 导出</button>
     ${!useKanban && !useCalendar ? `<button class="btn btn-sm ${_taskBulkMode?'btn-p':''}" onclick="toggleTaskBulkMode()" title="进入/退出批量编辑模式">${_taskBulkMode?'× 退出批量编辑':'☑ 批量编辑'}</button>` : ''}
     ${mode!=='archive'?`<button class="btn btn-ai btn-sm" onclick="openAiQuickTask()" title="说一句话,AI 自动整理成任务">🎤 AI 速记</button>`:''}
@@ -4067,7 +4138,7 @@ function renderTaskListView(filtered, source, mode){
 
   return `${bulkBar}
   <div class="tbl-card">
-    <div class="tbl-hd ${colsClass}">${headerCell}<span>任务标题</span><span>分类</span><span>优先级</span><span>状态</span><span>进度</span><span>负责人</span><span>截止</span><span>操作</span></div>
+    <div class="tbl-hd ${colsClass}">${headerCell}<span>任务标题</span><span>分类</span><span>优先级</span><span>状态</span><span>进度</span><span>责任人</span><span>截止</span><span>操作</span></div>
     ${paged.length===0?`<div class="empty-st"><div class="ei">📋</div><h3>${mode==='archive'?'归档库空空如也':'暂无匹配任务'}</h3><p>${source.length===0?(mode==='archive'?'已完成的任务可在详情页归档':'点击右上角"新建任务"开始'):'尝试修改筛选条件'}</p></div>`:
       paged.map(t=>{
         const ce=canEditTask(t), cd=canDeleteTask(t);
@@ -4108,7 +4179,7 @@ function renderTaskListView(filtered, source, mode){
             })()}${h(t.title)}</div>
             <div class="co-i">${h(t.description||'').slice(0,60)}${(t.description||'').length>60?'…':''}</div>
           </div>
-          <span style="font-size:12px;color:var(--sl)">${h(t.category||'其他')}</span>
+          <span style="font-size:12px;color:var(--sl)">${h(t.category||'其他')}${t.taskType?`<br><span class="bdg" style="background:#eef2ff;color:#3730a3;font-size:9px;padding:1px 5px;border-radius:7px;margin-top:2px;display:inline-block">${h(t.taskType)}</span>`:''}</span>
           <span><span class="bdg ${pr.bdg}"><span class="pri-dot ${pr.dot}"></span>${pr.label}</span></span>
           <span><span class="bdg ${st.cls}">${st.label}</span></span>
           <div onclick="event.stopPropagation()">
@@ -4320,13 +4391,13 @@ function bulkChangeAssignee(){
     assignableUsers = assignableUsers.filter(u=>memberIds.has(u.id));
   }
   const options = assignableUsers.map(u=>`<option value="${u.id}">${h(u.name||u.email||'未命名')}</option>`).join('');
-  openModal(`批量改派负责人(${n} 个任务)`,`
+  openModal(`批量改派责任人(${n} 个任务)`,`
     <div class="form-grid">
       <div class="fg full">
-        <label>新负责人<span class="req">*</span></label>
+        <label>新责任人<span class="req">*</span></label>
         <select id="bulk-assignee">${options}</select>
         <div style="margin-top:8px;padding:9px 11px;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;font-size:12px;color:#166534;line-height:1.7">
-          💡 <b>原负责人将作为「协作负责人(第二责任人)」保留</b>,继续能看到任务并参与协作,只是不再是主负责人。<br>
+          💡 <b>原责任人将作为「协作责任人(第二责任人)」保留</b>,继续能看到任务并参与协作,只是不再是主责任人。<br>
           创建人(第一责任人)始终不变。
         </div>
       </div>
@@ -4336,7 +4407,7 @@ function bulkChangeAssignee(){
 }
 async function applyBulkChangeAssignee(){
   const newAssigneeId = document.getElementById('bulk-assignee')?.value;
-  if(!newAssigneeId){toast('请选择负责人','err');return;}
+  if(!newAssigneeId){toast('请选择责任人','err');return;}
   const newAssignee = DB.profiles.find(p=>p.id===newAssigneeId);
   if(!newAssignee){toast('用户不存在','err');return;}
   const ids = [...selectedTaskIds];
@@ -4417,7 +4488,7 @@ async function applyBulkChangeAssignee(){
     // 3. 写系统进展
     await supa.from('task_progress').insert(progressToRow({
       taskId: id,
-      content: `负责人改派:${oldAssigneeName} → ${newAssignee.name}(原负责人保留为协作)`,
+      content: `责任人改派:${oldAssigneeName} → ${newAssignee.name}(原责任人保留为协作)`,
       progressBefore: t.progress||0,
       progressAfter:  t.progress||0,
     }));
@@ -4427,7 +4498,7 @@ async function applyBulkChangeAssignee(){
       toUser: newAssigneeId,
       type: 'task_assigned',
       title: `[任务改派] ${t.title||''}`,
-      content: `${currentUser?.name||'某人'} 把任务「${t.title||''}」改派给你作为主负责人。\n原负责人 ${oldAssigneeName} 仍作为协作者保留。\n请确认接收。`,
+      content: `${currentUser?.name||'某人'} 把任务「${t.title||''}」改派给你作为主责任人。\n原责任人 ${oldAssigneeName} 仍作为协作者保留。\n请确认接收。`,
       relatedTaskId: id,
     });
 
@@ -4437,7 +4508,7 @@ async function applyBulkChangeAssignee(){
   clearTaskSelection();
   const parts = [`成功 ${ok} 个`];
   if(fail) parts.push(`失败 ${fail} 个`);
-  if(keptCollab) parts.push(`${keptCollab} 位原负责人保留为协作`);
+  if(keptCollab) parts.push(`${keptCollab} 位原责任人保留为协作`);
   let msg = '改派完成:' + parts.join(' · ');
   if(autoJoinedDepts.size>0){
     msg += `\n已自动将 ${newAssignee.name} 加入 ${autoJoinedDepts.size} 个部门`;
@@ -4564,7 +4635,7 @@ function bulkExportExcel(){
     {k:'title',l:'任务标题'},{k:'category',l:'分类'},{k:'priorityLbl',l:'优先级'},
     {k:'statusLbl',l:'状态'},{k:'progress',l:'进度'},{k:'stage',l:'阶段'},
     {k:'startDate',l:'起始日期'},{k:'dueDate',l:'截止日期'},{k:'completedAt',l:'完成日期'},
-    {k:'assigneeName',l:'负责人'},{k:'assignerName',l:'指派人'},
+    {k:'assigneeName',l:'责任人'},{k:'assignerName',l:'指派人'},
     {k:'departmentName',l:'所属部门/项目'},{k:'customerName',l:'关联客户'},
     {k:'tags',l:'标签'},{k:'blockerReason',l:'缓慢/超前说明'},{k:'description',l:'任务描述'},
     {k:'createdByName',l:'创建人'},{k:'createdAt',l:'创建日期'},{k:'progressCount',l:'进展记录数'},
@@ -4609,6 +4680,7 @@ function renderTaskKanbanView(filtered, source, mode){
       <div class="kb-c-meta">
         <span class="bdg ${pr.bdg}"><span class="pri-dot ${pr.dot}"></span>${pr.label}</span>
         <span class="bdg" style="background:#f3f4f6;color:#374151">${h(t.category||'其他')}</span>
+        ${t.taskType?`<span class="bdg" style="background:#eef2ff;color:#3730a3">${h(t.taskType)}</span>`:''}
       </div>
       ${(t.progress||0)>0?`<div class="kb-c-prog">
         <div class="prog-bar"><div class="prog-fill ${t.status==='slow'?'slow':''}" style="width:${t.progress||0}%"></div></div>
@@ -4845,6 +4917,7 @@ function openDayTasksModal(dStr){
     if(tFilter.st  && t.status!==tFilter.st) return false;
     if(tFilter.pr  && t.priority!==tFilter.pr) return false;
     if(tFilter.cat && t.category!==tFilter.cat) return false;
+    if(tFilter.type && (t.taskType||'')!==tFilter.type) return false;
     if(tFilter.dept && t.departmentId!==tFilter.dept) return false;
     if(tFilter.assignee && t.assigneeId!==tFilter.assignee) return false;
     return true;
@@ -4970,7 +5043,7 @@ refreshTasks = function(){
 function resetTaskFilter(){
   const curView = tFilter.view;
   const curCalMonth = tFilter.calMonth;
-  tFilter={q:'',st:'',pr:'',cat:'',dept:'',assignee:'',page:1,view:curView,calMonth:curCalMonth};
+  tFilter={q:'',st:'',pr:'',cat:'',type:'',dept:'',assignee:'',page:1,view:curView,calMonth:curCalMonth};
   refreshTasks();
 }
 
@@ -4978,6 +5051,14 @@ function resetTaskFilter(){
 // ── 任务表单(新建/编辑)
 // ══════════════════════════════════════════════════════════
 let editingTaskId=null;
+
+// v33.0.13:执行人列表本地搜索过滤
+function _filterExecList(q){
+  const ql = (q||'').toLowerCase().trim();
+  document.querySelectorAll('#tf-exec-list .tf-exec-item').forEach(el=>{
+    el.style.display = (!ql || (el.dataset.search||'').includes(ql)) ? '' : 'none';
+  });
+}
 
 function openTaskForm(id){
   editingTaskId=id;
@@ -5005,6 +5086,19 @@ function openTaskForm(id){
     return `<option value="${val}" ${(t?t[k]:def)===val?'selected':''}>${lbl}</option>`;
   }).join('');
 
+  // v33.0.13:执行人多选(候选 = 全部活跃用户 + 全部部门/项目组)
+  const curExecs = t ? getTaskExecutors(t.id) : [];
+  const execCheckedKeys = new Set(curExecs.map(e=>e.executorType+':'+e.executorId));
+  const execDepts = DB.departments.filter(d=>d.isActive!==false);
+  const execItem = (etype, eid, name, sub) => {
+    const checked = execCheckedKeys.has(etype+':'+eid);
+    const search = ((name||'')+' '+(sub||'')).toLowerCase();
+    return `<label class="tf-exec-item" data-search="${h(search)}" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;${checked?'background:#eef2ff':''}">
+      <input type="checkbox" class="tf-exec-cb" value="${h(eid)}" data-etype="${etype}" data-name="${h(name||'')}" ${checked?'checked':''}>
+      <span>${etype==='department'?'🏢':'👤'} ${h(name||'未命名')}${sub?`<span style="color:var(--ms);font-size:11px;margin-left:5px">${h(sub)}</span>`:''}</span>
+    </label>`;
+  };
+
   openModal(`${id?'✏️ 编辑任务':'➕ 新建任务'}`,`
   <div class="form-grid">
     <div class="f-sect">基本信息</div>
@@ -5020,6 +5114,11 @@ function openTaskForm(id){
     </div>
     <div class="fg"><label>分类</label>
       <select id="tf-cat">${sel('category','其他',TSK_CATEGORY)}</select></div>
+    <div class="fg"><label>类型</label>
+      <select id="tf-type">
+        <option value="" ${!(t&&t.taskType)?'selected':''}>(未分类)</option>
+        ${TSK_TYPE.map(c=>`<option value="${c}" ${t&&t.taskType===c?'selected':''}>${c}</option>`).join('')}
+      </select></div>
     <div class="fg"><label>优先级<span class="req">*</span></label>
       <select id="tf-pri">${sel('priority','normal',TSK_PRIORITY_KEYS.map(k=>({value:k,label:TSK_PRIORITY[k].label})))}</select></div>
     <div class="fg"><label>状态</label>
@@ -5038,21 +5137,31 @@ function openTaskForm(id){
       <input type="date" id="tf-due" value="${v('dueDate')}"><span class="err-m" id="e-tf-due"></span></div>
 
     <div class="f-sect">分配与归属</div>
-    <div class="fg"><label>负责人<span class="req">*</span></label>
+    <div class="fg"><label>责任人<span class="req">*</span></label>
       <select id="tf-assignee">
         ${assignableUsers.map(u=>`<option value="${u.id}" ${(t?t.assigneeId:currentUser?.id)===u.id?'selected':''}>${h(u.name||u.email||'未命名')}</option>`).join('')}
       </select></div>
     <div class="fg full"><label>指派留言(指派给他人时随通知发送,选填)
         <button type="button" class="btn btn-ai btn-sm" style="margin-left:8px;padding:3px 9px;font-size:11px" onclick="aiDraftMsg('assign','',this)" title="AI 起草礼貌清晰、含行动项的指派留言">✍️ AI 起草</button>
       </label>
-      <textarea id="tf-assign-msg" placeholder="给负责人的话(如:这个客户比较重要,麻烦本周内先联系一次…)。留空则发送系统默认通知。" style="min-height:56px"></textarea>
-      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 仅当负责人是他人时,保存后随"任务指派"消息一并发送;AI 起草后可自行修改。</div>
+      <textarea id="tf-assign-msg" placeholder="给责任人的话(如:这个客户比较重要,麻烦本周内先联系一次…)。留空则发送系统默认通知。" style="min-height:56px"></textarea>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 仅当责任人是他人时,保存后随"任务指派"消息一并发送;AI 起草后可自行修改。</div>
     </div>
     <div class="fg"><label>所属部门/项目</label>
       <select id="tf-dept">
         <option value="" ${!t?.departmentId?'selected':''}>— 无 —</option>
         ${DB.departments.filter(d=>d.isActive!==false).map(d=>`<option value="${d.id}" ${t?.departmentId===d.id?'selected':''}>${h(d.name)}${d.type==='project'?' (项目)':''}</option>`).join('')}
       </select></div>
+    <div class="fg full"><label>执行人(可多选:个人 / 部门·项目组,选填)</label>
+      <input id="tf-exec-search" placeholder="🔍 搜索人员或部门..." autocomplete="off" oninput="_filterExecList(this.value)" style="margin-bottom:6px">
+      <div id="tf-exec-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--sv);border-radius:8px;background:#fafbfc;padding:6px">
+        ${execDepts.length?`<div style="font-size:11px;color:var(--ms);padding:3px 6px">部门 / 项目组</div>`:''}
+        ${execDepts.map(d=>execItem('department', d.id, d.name, d.type==='project'?'项目':'部门')).join('')}
+        <div style="font-size:11px;color:var(--ms);padding:3px 6px;margin-top:4px">人员</div>
+        ${allUsers.map(u=>execItem('user', u.id, u.name||u.email||'未命名', u.email||'')).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 执行人可查看任务、记录进展;指派保存后会收到通知(部门将展开为成员)。</div>
+    </div>
     <div class="fg"><label>关联客户(可选)</label>
       ${searchableSelect({
         id: 'tf-cust',
@@ -5102,11 +5211,20 @@ async function saveTask(){
   // 状态为 done 时进度强制 100,触发器也会做这件事,前端先同步显示
   if(status==='done') progress=100;
 
+  // v33.0.13:收集执行人多选(个人 / 部门)
+  const executors = Array.from(document.querySelectorAll('#tf-exec-list .tf-exec-cb:checked')).map(cb=>({
+    type: cb.dataset.etype,
+    id:   cb.value,
+    name: cb.dataset.name||'',
+  }));
+
   const obj={
     id: editingTaskId || uuid(),
     title,
     description:   document.getElementById('tf-desc')?.value.trim()||'',
     category:      document.getElementById('tf-cat')?.value||'其他',
+    taskType:      document.getElementById('tf-type')?.value||null,
+    executors,
     priority:      document.getElementById('tf-pri')?.value||'normal',
     status,
     progress,
@@ -5201,6 +5319,24 @@ async function saveTaskToDB(obj, existing, assignMsg){
     }
   }
 
+  // v33.0.13:同步 task_executors(执行人,个人 / 部门·项目组)
+  // Z1.1 同理:必须先删后写,保证编辑后一致;捕获旧执行人用于"只通知新增者"
+  const oldExecutors = isUpdate ? getTaskExecutors(obj.id) : [];
+  if(Array.isArray(obj.executors)){
+    try{
+      await supa.from('task_executors').delete().eq('task_id', obj.id);
+      if(obj.executors.length){
+        await supa.from('task_executors').insert(obj.executors.map(e=>({
+          task_id:       obj.id,
+          executor_type: e.type,
+          executor_id:   e.id,
+          executor_name: e.name || '',
+          added_by:      currentUser?.id || null,
+        })));
+      }
+    }catch(e){console.warn('[saveTaskToDB] 同步执行人失败:', e);}
+  }
+
   // 若状态发生变化,自动写一条进展记录(系统记录)
   if(existing && existing.status!==obj.status){
     await supa.from('task_progress').insert(progressToRow({
@@ -5217,7 +5353,9 @@ async function saveTaskToDB(obj, existing, assignMsg){
   // 触发条件:① 新建任务且指派给他人;② 改派任务给新的人(assigneeId 变了)
   const assigneeChanged = existing && existing.assigneeId !== obj.assigneeId;
   const isNewAssignment = !existing && obj.assigneeId && obj.assigneeId !== currentUser?.id;
+  let notifiedAssigneeId = null;  // v33.0.13:记录已通知的责任人,避免执行人环节重复打扰
   if(obj.assigneeId && (isNewAssignment || (assigneeChanged && obj.assigneeId !== currentUser?.id))){
+    notifiedAssigneeId = obj.assigneeId;
     // 通知接收方
     // v33.0.9 Batch2:若指派方填写/AI 起草了"指派留言",用它作为正文(人在环中);否则用默认通知
     const _msg = (typeof assignMsg==='string' && assignMsg.trim())
@@ -5236,9 +5374,39 @@ async function saveTaskToDB(obj, existing, assignMsg){
     }
   }
 
+  // v33.0.13 (req3):指派强制给"执行人"发消息
+  // 规则:① 部门展开为成员(department_members);② 一律排除当前用户自己;③ 去重;
+  //       ④ 排除刚已通知的责任人(同一人不重复);⑤ 只通知本次新增的执行人(编辑不刷屏);
+  //       ⑥ 责任人是本人也照常通知执行人(本块不依赖 assignee 是否他人)。
+  if(Array.isArray(obj.executors) && obj.executors.length){
+    const oldKeys = new Set(oldExecutors.map(e=>e.executorType+':'+e.executorId));
+    const newEntries = obj.executors.filter(e=>!oldKeys.has(e.type+':'+e.id));
+    const recipientIds = new Set();
+    for(const e of newEntries){
+      if(e.type==='user'){
+        recipientIds.add(e.id);
+      }else if(e.type==='department'){
+        (DB.departmentMembers||[]).filter(m=>m.departmentId===e.id).forEach(m=>recipientIds.add(m.userId));
+      }
+    }
+    recipientIds.delete(currentUser?.id);          // 排除自己
+    if(notifiedAssigneeId) recipientIds.delete(notifiedAssigneeId);  // 去重:责任人已通知
+    const _execContent = `${currentUser?.name||'某人'} 指派你参与执行任务「${obj.title||''}」。\n${obj.dueDate?'截止日期:'+obj.dueDate+'\n':''}${obj.priority?'优先级:'+(TSK_PRIORITY[obj.priority]?.label||obj.priority)+'\n':''}你可查看任务并记录进展。请在消息中心回复确认。`;
+    for(const rid of recipientIds){
+      await sendMessage({
+        toUser: rid,
+        type: 'task_assigned',
+        title: `任务执行指派:${obj.title||''}`,
+        content: _execContent,
+        relatedTaskId: obj.id,
+      });
+    }
+  }
+
   await loadTasks();
   await loadDepartmentMembers();
   await loadTaskAssignees();  // v32.3:同步刷新协作者表
+  await loadTaskExecutors();  // v33.0.13:同步刷新执行人表
 }
 
 async function deleteTaskFromDB(id){
@@ -5297,12 +5465,13 @@ function openTaskDetail(id){
   // 信息字段
   const infoFields = [
     ['分类',     h(t.category||'—')],
+    ['类型',     t.taskType?h(t.taskType):'(未分类)'],
     ['优先级',   `<span class="bdg ${pr.bdg}"><span class="pri-dot ${pr.dot}"></span>${pr.label}</span>`],
     ['状态',     `<span class="bdg ${st.cls}">${st.label}</span>`],
     ['进度',     `${t.progress||0}%`],
     ['起始日期', t.startDate?fd(t.startDate):'—'],
     ['截止日期', t.dueDate?`<span class="${dCls}">${dueLabel(t)}</span>`:'—'],
-    ['负责人',   h(t.assigneeName||getUserName(t.assigneeId))],
+    ['责任人',   h(t.assigneeName||getUserName(t.assigneeId))],
     ['指派人',   h(t.assignerName||(t.assignerId?getUserName(t.assignerId):'—'))],
     ['创建人',   h(t.createdByName||(t.createdBy?getUserName(t.createdBy):'—'))],
     ['创建时间', fd(t.createdAt)],
@@ -5362,7 +5531,7 @@ function openTaskDetail(id){
   const collaborators = allAssignees.filter(a=>a.role!=='primary' && a.userId !== t.createdBy);
   const collabBadgesHtml = collaborators.length>0 ? `
     <div class="tsk-det-section">
-      <h4>👥 协作负责人(第二责任人) · ${collaborators.length} 人</h4>
+      <h4>👥 协作责任人(第二责任人) · ${collaborators.length} 人</h4>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${collaborators.map(a=>{
           const profile = DB.profiles.find(p=>p.id===a.userId);
@@ -5374,6 +5543,26 @@ function openTaskDetail(id){
               ? `<span title="已确认接收于 ${fd(accepted)}" style="font-size:10px;color:#166534;font-weight:600">✓ 已接收</span>`
               : `<span title="尚未确认接收" style="font-size:10px;color:#dc2626;font-weight:600">● 未接收</span>`}
           </span>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  // v33.0.13:执行人展示(个人头像/名;部门显示部门徽章)
+  const executors = getTaskExecutors(t.id);
+  const execBadgesHtml = executors.length>0 ? `
+    <div class="tsk-det-section">
+      <h4>🚀 执行人 · ${executors.length}</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${executors.map(e=>{
+          if(e.executorType==='department'){
+            const dept = DB.departments.find(d=>d.id===e.executorId);
+            const dn = h(dept?.name||e.executorName||'(部门)');
+            const cnt = (DB.departmentMembers||[]).filter(m=>m.departmentId===e.executorId).length;
+            return `<span class="bdg" style="background:#ede9fe;color:#5b21b6;padding:5px 10px;font-size:12px;display:inline-flex;align-items:center;gap:5px">🏢 ${dn}${cnt?`<span style="font-size:10px;color:#7c3aed">${cnt} 人</span>`:''}</span>`;
+          }
+          const profile = DB.profiles.find(p=>p.id===e.executorId);
+          const name = h(profile?.name||e.executorName||'(未知)');
+          return `<span class="bdg" style="background:#eef2ff;color:#3730a3;padding:5px 10px;font-size:12px;display:inline-flex;align-items:center;gap:5px">👤 ${name}</span>`;
         }).join('')}
       </div>
     </div>` : '';
@@ -5417,6 +5606,8 @@ function openTaskDetail(id){
     </div>
 
     ${collabBadgesHtml}
+
+    ${execBadgesHtml}
 
     ${t.description?`<div class="tsk-det-section">
       <h4>📝 任务描述</h4>
@@ -5715,7 +5906,7 @@ async function saveProgress(){
     const statusChangeText = t.status!==newStatus
       ? `\n状态变更:${TSK_STATUS[t.status]?.label||t.status} → ${TSK_STATUS[newStatus]?.label||newStatus}` : '';
     const blockerText = newStatus==='slow' && blockers ? `\n阻碍:${blockers}` : '';
-    const myRole = isPrimaryReporting ? '主负责人' : '协作负责人';
+    const myRole = isPrimaryReporting ? '主责任人' : '协作责任人';
     const contentText = `${currentUser?.name||'员工'}(${myRole}) 更新了任务进展:\n${content}${statusChangeText}\n当前进度:${newProgress}%${blockerText}${nextAction?'\n下一步:'+nextAction:''}`;
 
     for(const toUid of notifySet){
@@ -5994,7 +6185,7 @@ async function aiTeamInsight(){
 - 分类分布:${categoryLines}
 - 优先级分布:${priorityLines}
 
-按负责人统计:
+按责任人统计:
 ${assigneeLines}
 
 请输出以下 4 段分析,使用粗体小标题:
@@ -6045,7 +6236,7 @@ function exportTaskToWord(taskId){
     ['起始日期',     fmt(t.startDate)],
     ['截止日期',     fmt(t.dueDate)],
     ['完成时间',     fmt(t.completedAt?t.completedAt.slice(0,19).replace('T',' '):'')],
-    ['负责人',       fmt(t.assigneeName||getUserName(t.assigneeId))],
+    ['责任人',       fmt(t.assigneeName||getUserName(t.assigneeId))],
     ['指派人',       fmt(t.assignerName||(t.assignerId?getUserName(t.assignerId):''))],
     ['所属部门/项目',fmt(t.departmentName)],
     ['关联客户',     fmt(t.customerName)],
@@ -6154,6 +6345,7 @@ function exportTasksToExcel(){
     if(tFilter.st  && t.status!==tFilter.st) return false;
     if(tFilter.pr  && t.priority!==tFilter.pr) return false;
     if(tFilter.cat && t.category!==tFilter.cat) return false;
+    if(tFilter.type && (t.taskType||'')!==tFilter.type) return false;
     if(tFilter.dept && t.departmentId!==tFilter.dept) return false;
     if(tFilter.assignee && t.assigneeId!==tFilter.assignee) return false;
     return true;
@@ -6194,7 +6386,7 @@ function exportTasksToExcel(){
     {k:'startDate',      l:'起始日期'},
     {k:'dueDate',        l:'截止日期'},
     {k:'completedAt',    l:'完成日期'},
-    {k:'assigneeName',   l:'负责人'},
+    {k:'assigneeName',   l:'责任人'},
     {k:'assignerName',   l:'指派人'},
     {k:'departmentName', l:'所属部门/项目'},
     {k:'customerName',   l:'关联客户'},
@@ -6920,9 +7112,9 @@ function renderTaskFollow(){
       </div>
       <div class="tsk-tl-meta">
         ${h(a.byName)}
-        ${t.assigneeName&&t.assigneeId!==a.byId&&a._kind!=='create'?` · 任务负责人 ${h(t.assigneeName)}`:''}
+        ${t.assigneeName&&t.assigneeId!==a.byId&&a._kind!=='create'?` · 任务责任人 ${h(t.assigneeName)}`:''}
         ${t.category?` · ${h(t.category)}`:''}
-        ${a._kind==='create'&&a.assigneeName?` · 负责人 ${h(a.assigneeName)}`:''}
+        ${a._kind==='create'&&a.assigneeName?` · 责任人 ${h(a.assigneeName)}`:''}
       </div>
       ${a._kind==='progress' && a.content?`<div class="tsk-tl-body" style="margin-top:6px">${h(a.content)}</div>`:''}
       ${a.blockers?`<div class="tsk-tl-meta" style="color:#991b1b;margin-top:5px">📝 <strong>进度说明:</strong> ${h(a.blockers)}</div>`:''}
@@ -6945,7 +7137,7 @@ function renderTaskFollow(){
         <span style="font-size:11px;color:#991b1b">截止 ${t.dueDate}</span>
       </div>
       <div class="tsk-tl-meta">
-        负责人 ${h(t.assigneeName||'—')}
+        责任人 ${h(t.assigneeName||'—')}
         ${t.category?` · ${h(t.category)}`:''}
          · 最近活动 ${lastTime||'无'}
       </div>
@@ -7075,7 +7267,7 @@ function openAIImportTasks(){
     <div id="ai-imp-tab-xlsx" class="ai-imp-pane">
       <label style="font-size:12px;color:var(--sl);display:block;margin-bottom:6px">上传 Excel 文件(.xlsx/.xls):</label>
       <input type="file" id="ai-imp-xlsx-file" accept=".xlsx,.xls" style="width:100%;padding:9px;border:1px dashed var(--sv);border-radius:7px;background:#fafefa">
-      <div style="margin-top:8px;font-size:11px;color:var(--ms)">AI 会读取表格内容并智能识别任务字段(标题、负责人、截止日期、优先级、说明等)</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--ms)">AI 会读取表格内容并智能识别任务字段(标题、责任人、截止日期、优先级、说明等)</div>
     </div>
 
     <!-- Tab: Word -->
@@ -7544,7 +7736,7 @@ function _renderAIImpTaskCard(t, idx){
           <input type="date" value="${t.dueDate||''}" onchange="updateAIImpField(${idx},'dueDate',this.value)">
         </div>
         <div class="ai-imp-fg">
-          <label>负责人 *</label>
+          <label>责任人 *</label>
           <select onchange="updateAIImpRowAssignee(${idx},this.value)">
             <option value="">— 我自己 —</option>
             ${allUsers.map(u=>`<option value="${u.id}" ${t.assigneeId===u.id?'selected':''}>${h(u.name||u.email||'')}</option>`).join('')}
