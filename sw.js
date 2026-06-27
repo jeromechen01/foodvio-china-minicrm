@@ -2,7 +2,7 @@
 // ════════════════════════════════════════════════════════════════
 // ⚠ 每次发版必须 bump 此版本号(与 App 版本对应),否则浏览器不会
 //   认为 SW 变了 → "发现新版本"提示不触发,用户卡在旧缓存。
-const SW_VERSION = 'huahua-crm-v33.0.15';
+const SW_VERSION = 'huahua-crm-v33.0.16';
 const CACHE = SW_VERSION;
 
 // 部署在 GitHub Pages 子路径 /foodvio-china-minicrm/,以下全部用相对路径

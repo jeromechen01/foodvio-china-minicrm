@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.15 (PWA)</title>
+<title>花花食界AI助理 · v33.0.16 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,20 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.16(2026-06-27):双模型分工 — DeepSeek 主力跑所有文字 + 视觉副模型仅识图时征用
+    · 🔴 回归底线:callAI 不带图片(images 空)时逐字节走主模型 DeepSeek,既有文字功能零影响。
+    · SQL(migration_v33.0.16_vision_submodel.sql):ai_shared_config 加 vision_protocol/
+      vision_endpoint/vision_model_name/vision_api_key 四列(仅加列、无新表、不改 RLS);
+      v33.0.14 的 vision 布尔列保留勿删,语义被「vision_api_key 是否非空」取代。
+    · 新增 getVisionAIConfig():取视觉副模型配置(共享读 vision_*;本地读 cfg.visionModelId),
+      未配置返回 null。callAI 在 images 非空时取 getVisionAIConfig(),有 Key 则这一次整体切到视觉
+      模型(文字+图片一起交给它),跑完即回主模型;无 Key 则 toast + 丢图,文字继续走主模型不中断。
+    · AI 设置 → 共享配置加「🖼 视觉模型(仅识别图片时调用)」区块:协议/端点/模型名/Key 四项 →
+      vision_* 列(saveSharedVisionFromForm);主模型 DeepSeek 区块完全不变。
+    · _effectiveVisionOK() 语义改为「是否已配置可用的视觉副模型」(= getVisionAIConfig()?.key 非空);
+      aiBreakdownTask 含图但未配视觉模型 → 提示并降级纯文字,不报错。下游 _call*(v33.0.14 已支持
+      images)不改。
   ══════════════════════════════════════════════════════════════════
   v33.0.15(2026-06-27):移动端优化 + 客户导入去重 + 短信归档(三件独立)
     · 移动端(纯前端):字号在 v33.0.6 基础上再 +2(输入框 ≥16px 防缩放、触控 ≥44px);
@@ -1833,7 +1847,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.15 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.16 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -6124,9 +6138,10 @@ async function aiBreakdownTask(){
   const docs = _taskAttach.filter(a=>a.kind==='doc');
   let images = _taskAttach.filter(a=>a.kind==='image').map(a=>({mediaType:a.mediaType, data:a.data}));
 
-  // 视觉门控:图片遇纯文本模型 → 提示并降级为「文字+文档」,绝不把图片发给 DeepSeek 等
+  // 视觉门控:未配置视觉副模型时 → 提示并降级为「文字+文档」,绝不把图片发给主模型 DeepSeek
+  // (有图时 callAI 会自动改用视觉副模型跑这一次;此处仅在未配置视觉模型时提前丢图,避免无谓调用)
   if(images.length && !_effectiveVisionOK()){
-    toast('当前模型不支持图片,本次仅按文字+文档整理(如需识图请在 AI 设置切换到视觉模型:豆包视觉/千问 Qwen-VL/Claude/Gemini)','err');
+    toast('未配置视觉模型,本次仅按文字+文档整理(请管理员在 AI 设置 → 共享配置 配置视觉模型:豆包视觉/千问 Qwen-VL)','err');
     images = [];
   }
 
@@ -10392,16 +10407,51 @@ function getEffectiveAIConfig(){
   };
 }
 
-// v33.0.14:当前激活模型是否支持视觉(识图)
-// Claude/Gemini 原生支持(永远 true);其余以该模型的 vision 开关为准:
-// 共享配置 → ai_shared_config.vision 列;本地配置 → cfg.models[id].vision。
-function _effectiveVisionOK(){
-  const eff = getEffectiveAIConfig();
-  const ty = (eff.type||'').toLowerCase();
-  if(ty==='claude'||ty==='anthropic'||ty==='gemini'||ty==='google') return true;
-  if(eff.source==='shared') return !!_sharedAICfg?.vision;
+// v33.0.16:取「视觉副模型」配置(独立于主模型,仅识图时被征用);未配置返回 null。
+// 返回与 getEffectiveAIConfig() 同形状的对象。
+function getVisionAIConfig(){
+  // 共享配置:读 _sharedAICfg.vision_*(snakeToCamel → visionApiKey 等)
+  if(isSharedAIActive()){
+    const s = _sharedAICfg||{};
+    const key = (s.visionApiKey||'').trim();
+    if(!key) return null;
+    return {
+      source: 'shared',
+      modelId: 'vision',
+      key,
+      model: s.visionModelName||'',
+      endpoint: s.visionEndpoint||'',
+      type: s.visionProtocol||'openai_compat',
+      name: '视觉模型(共享)',
+    };
+  }
+  // 本地配置:优先 cfg.visionModelId;否则回退到第一个标记「支持视觉」且配了 Key 的本地模型
   const cfg = loadAIConfig();
-  return !!(cfg.models?.[eff.modelId]?.vision);
+  let vid = cfg.visionModelId;
+  if(!vid){
+    const cand = Object.entries(cfg.models||{}).find(([id,m])=>m && m.vision && (m.key||'').trim());
+    vid = cand ? cand[0] : null;
+  }
+  if(!vid) return null;
+  const mcfg = cfg.models?.[vid];
+  if(!mcfg || !(mcfg.key||'').trim()) return null;
+  const allModels = getAllModels();
+  const meta = allModels[vid]||{};
+  return {
+    source: 'local',
+    modelId: vid,
+    key: mcfg.key||'',
+    model: mcfg.model||meta.models?.[0]||'',
+    endpoint: meta.endpoint||mcfg.endpoint||'',
+    type: meta.type||'openai_compat',
+    name: meta.name||vid,
+  };
+}
+
+// v33.0.16:语义改为「是否已配置可用的视觉副模型」(主模型 DeepSeek 不识图;
+// 含图但未配视觉模型 → 调用点据此提示并降级为纯文字,不报错)。
+function _effectiveVisionOK(){
+  return !!(getVisionAIConfig()?.key?.trim());
 }
 
 // 获取实际使用的高德 Key(共享优先,本地降级)
@@ -10525,7 +10575,7 @@ async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
                        images=null,
                        _action='generic', _actionLabel='', _cost=1}){
   // 1. 解析有效配置(共享优先 / 本地降级)
-  const eff = getEffectiveAIConfig();
+  let eff = getEffectiveAIConfig();
   if(!eff.key?.trim()){
     if(isAdmin()){
       toast('请在「AI设置 → 共享配置」填写 API Key(管理员配置,全员共享)','err');
@@ -10542,6 +10592,18 @@ async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
     if(!q.allowed){
       toast(`⛔ ${q.reason}。如需提高限额,请联系管理员。`,'err');
       return null;
+    }
+  }
+
+  // v33.0.16:带图片的这一次,自动改用视觉副模型(主模型 DeepSeek 不支持视觉)。
+  // 🔴 回归底线:images 为空时整段不进入,eff 仍是主模型 → 既有文字调用逐字节零变化。
+  if(images && images.length){
+    const v = getVisionAIConfig();
+    if(v && v.key?.trim()){
+      eff = v;                       // 仅这一次切到视觉模型;本次调用(文字+图片)整体走 v,跑完不影响下次
+    }else{
+      toast('未配置视觉模型,本次仅按文字整理(请管理员在 AI 设置 → 共享配置 配置视觉模型:豆包视觉/千问 Qwen-VL)','err');
+      images = null;                 // 没有视觉模型 → 丢弃图片,文字继续走主模型,不中断
     }
   }
 
@@ -11083,14 +11145,6 @@ function renderSharedAIConfigSection(){
         <div style="font-size:10px;color:var(--ms);margin-top:3px">批量导入算几次,推荐 10</div>
       </div>
 
-      <div class="fg full">
-        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-          <input type="checkbox" id="shared-vision" style="margin-top:2px"
-            ${((s.vision!==undefined?s.vision:(s.protocol==='anthropic'||s.protocol==='google')))?'checked':''}>
-          <span style="font-size:12px;color:var(--sl);line-height:1.6">支持视觉(可识别图片)— 勾选后「AI 分析整理」可把图片发给共享模型。Claude / Gemini 原生支持;豆包视觉版 / 千问 Qwen-VL 等请手动勾选;DeepSeek 等纯文本模型请保持关闭(否则发图会报错)。</span>
-        </label>
-      </div>
-
       <div class="fg full" style="background:#fef3c7;border-radius:7px;padding:8px 10px;font-size:11px;color:#92400e;line-height:1.6">
         ⚠ <strong>注意:</strong>API Key 会被员工的浏览器加载(为了直连 AI 服务)。即便保密,员工仍可通过浏览器开发者工具查看。建议:
         ① 使用单独的"团队共享 Key"(便于在出问题时单独作废而不影响您个人 Key)
@@ -11104,6 +11158,37 @@ function renderSharedAIConfigSection(){
           <button class="btn btn-p" onclick="saveSharedAIFromForm(this)">💾 保存并启用</button>
         </div>
         <div id="shared-test-result" class="ai-test-result" style="display:none;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- v33.0.16:视觉模型(仅识别图片时调用,独立于主模型 DeepSeek) -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #16a34a">
+      <div style="font-weight:600;color:#166534;font-size:13px;margin-bottom:4px">🖼 视觉模型(仅识别图片时调用)</div>
+      <div style="font-size:11px;color:var(--ms);margin-bottom:8px;line-height:1.6">留空则不启用图片识别;文字任务始终用主模型(DeepSeek)。仅当「AI 分析整理」带图片时,这一次自动改用此模型,跑完即回主模型。推荐:豆包视觉版(doubao-*-vision)/ 千问 Qwen-VL(qwen-vl-max)。</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label>协议类型</label>
+          <select id="shared-vision-protocol">
+            <option value="openai_compat" ${(s.visionProtocol||'openai_compat')==='openai_compat'?'selected':''}>OpenAI 兼容(豆包/千问)</option>
+            <option value="claude" ${s.visionProtocol==='claude'?'selected':''}>Anthropic (Claude)</option>
+            <option value="gemini" ${s.visionProtocol==='gemini'?'selected':''}>Google (Gemini)</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>模型名</label>
+          <input id="shared-vision-model" value="${h(s.visionModelName||'')}" placeholder="如:doubao-seed-1-6-vision / qwen-vl-max" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="fg full">
+          <label>API 端点 URL</label>
+          <input id="shared-vision-endpoint" value="${h(s.visionEndpoint||'')}" placeholder="如:https://ark.cn-beijing.volces.com/api/v3/chat/completions" style="font-family:monospace;font-size:11px">
+        </div>
+        <div class="fg full">
+          <label>视觉模型 API Key <span style="font-weight:400;color:var(--ms);font-size:11px">(独立于主模型,留空=不启用图片识别)</span></label>
+          <input type="password" id="shared-vision-key" value="${h(s.visionApiKey||'')}" placeholder="视觉模型独立 Key" style="font-family:monospace;font-size:12px">
+        </div>
+        <div class="fg full" style="display:block">
+          <button class="btn btn-p" onclick="saveSharedVisionFromForm(this)">💾 保存视觉模型</button>
+        </div>
       </div>
     </div>
 
@@ -11176,9 +11261,8 @@ async function saveSharedAIFromForm(btn){
   const apiKey     = document.getElementById('shared-api-key')?.value.trim()||'';
   const dailyLimit = parseInt(document.getElementById('shared-daily-limit')?.value||'50',10);
   const bulkCost   = parseInt(document.getElementById('shared-bulk-cost')?.value||'10',10);
-  const vision     = !!document.getElementById('shared-vision')?.checked;  // v33.0.14:视觉开关
 
-  console.log('[saveSharedAIFromForm] 表单数据:', {modelId, modelName, protocol, endpoint, apiKeyLen: apiKey.length, dailyLimit, bulkCost, vision});
+  console.log('[saveSharedAIFromForm] 表单数据:', {modelId, modelName, protocol, endpoint, apiKeyLen: apiKey.length, dailyLimit, bulkCost});
 
   if(!apiKey){toast('API Key 不可为空','err');return;}
   if(!endpoint && protocol!=='google'){toast('请填写 API 端点 URL','err');return;}
@@ -11194,13 +11278,29 @@ async function saveSharedAIFromForm(btn){
     modelId, modelName, protocol, endpoint, apiKey,
     dailyLimitPerUser: dailyLimit,
     bulkActionCost: bulkCost,
-    vision,
   });
 
   if(btn){btn.disabled=false; btn.textContent=originalText;}
 
   console.log('[saveSharedAIFromForm] 保存结果:', ok);
   if(ok) renderPage('ai');
+}
+
+// v33.0.16:保存「视觉副模型」配置(独立于主模型,仅识图时调用)
+async function saveSharedVisionFromForm(btn){
+  if(!isAdmin()){toast('仅管理员可配置','err');return;}
+  const visionProtocol  = document.getElementById('shared-vision-protocol')?.value||'openai_compat';
+  const visionModelName = document.getElementById('shared-vision-model')?.value.trim()||'';
+  const visionEndpoint  = document.getElementById('shared-vision-endpoint')?.value.trim()||'';
+  const visionApiKey    = document.getElementById('shared-vision-key')?.value.trim()||'';
+  // 仅在填了 Key(=启用)时校验端点/模型名;留空 Key 表示关闭图片识别
+  if(visionApiKey && visionProtocol!=='gemini' && !visionEndpoint){ toast('请填写视觉模型 API 端点 URL','err'); return; }
+  if(visionApiKey && !visionModelName){ toast('请填写视觉模型名','err'); return; }
+  const orig = btn?.textContent||'💾 保存视觉模型';
+  if(btn){btn.disabled=true; btn.textContent='⏳ 保存中...';}
+  const ok = await saveSharedAIConfig({ visionProtocol, visionModelName, visionEndpoint, visionApiKey });
+  if(btn){btn.disabled=false; btn.textContent=orig;}
+  if(ok){ toast(visionApiKey?'✓ 视觉模型已保存,识图时自动启用':'已清空视觉模型(图片识别关闭)'); renderPage('ai'); }
 }
 
 // 保存共享高德 Key
