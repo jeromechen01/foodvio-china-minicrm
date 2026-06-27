@@ -1,7 +1,7 @@
 {
-  "name": "花花食界客户与任务管理系统",
-  "short_name": "花花CRM",
-  "description": "北京花花食界食品科技有限公司 · 内部客户与任务管理系统",
+  "name": "花花食界AI助理",
+  "short_name": "花花食界AI",
+  "description": "北京花花食界食品科技有限公司 · 花花食界AI助理",
   "lang": "zh-CN",
   "dir": "ltr",
   "start_url": ".",

@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.10 (PWA)</title>
+<title>花花食界AI助理 · v33.0.12 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="花花CRM"/>
+<meta name="apple-mobile-web-app-title" content="花花食界AI"/>
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png"/>
@@ -21,6 +21,39 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.12(2026-06-27):应用更名 +「命令栏催办」安全收口
+    · 更名:应用显示名「花花食界客户与任务管理系统」→「花花食界AI助理」,覆盖
+      <title> / 登录页 <h1> / 仪表盘副标题 / 周报与数据导出署名 / Excel 报表标题 /
+      ICS PRODID / 侧栏 .sb-sub / 页脚 .sb-foot;并去掉侧栏 · v3.3、报表署名 · v28 (2.0)
+      等历史双编号。manifest.webmanifest 同步改 name/short_name(否则 PWA 安装后仍旧名)。
+    · 安全:命令栏「催办任务」不再直接路由 remindTaskProgress(会无确认对外发消息),
+      改为 openTaskDetail(taskId),由用户在详情页点「⏰ 催进度」走原有确认流。
+    ⚠ 发版:无 SQL → bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.12'。
+  ══════════════════════════════════════════════════════════════════
+  v33.0.11 新功能(2026-06-27):AI 助理化 Batch4 — 全局 AI 命令栏(问 + 令),第一档收尾
+    本质是"调度器"非功能工厂:把自然语言分流成 导航 / 令 / 问 三类,纯前端,
+    零 schema、零新表、零新 CDN、零新 SQL。
+    · 入口:顶栏「⌘ 命令」按钮 + 键盘 Ctrl/⌘+K(带修饰键,不与输入框冲突;ESC/
+      遮罩关闭)。专用浮层 #cmdbar-ov + 常驻输入框 #cmdbar-input + 结果区
+      #cmdbar-result,不与 #ai-draft-ov / #modal-ov 冲突。
+    · 流程:输入 → callAI 意图分类(1 次,maxTokens≈300,严格 JSON,枚举页面/动作
+      降幻觉)→ 路由:
+        导航 navigate → 解析到 PAGE_META 键 → 复用 nav() 跳转(沿用其权限拦截)。
+        令 command → _aiMatchCustomer / 本地模糊匹配解析实体 → 调既有动作函数(自带
+          预览/确认):openAiQuickFU / openAiQuickTask / aiDraftFUScript /
+          aiPreMeetingBrief / aiAssessHealthOne / remindTaskProgress / openMeetingForm /
+          openTaskForm(拆解) / aiSuggestNextAction / openTodayPlan / openCoolingList /
+          generateMyWeeklyReport。实体不唯一→结果区列候选点选,绝不默认选第一个。
+        问 ask → 优先本地确定性回答(本周跟进数/逾期/今日到期/降温,零 AI);否则喂
+          **预聚合紧凑摘要**(统计数字+少量标题,非原始全表)调 callAI(≈800),mdRender 渲染。
+    · 五条红线:命令栏自身绝不写库/发消息/改派/删除(只做意图+实体解析+路由);
+      "问"严格只读且只用 visibleCustomers/visibleTasks/myTasks/visibleFollowups/
+      _coolingCustomers;喂 AI 限量预聚合控 token 与隐私;意图不明列候选不猜执行。
+    · 复用:callAI / _aiParseObj / _parseAIJsonArray / _aiMatchCustomer / nav + PAGE_META /
+      mdRender / h / toast / weekRange / today / du / normTaskStatus + 第 4 节全部既有动作函数。
+      未碰 MiniSupabase/RLS/四生命周期点。
+    ⚠ 发版:无 SQL → bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.11'。
   ══════════════════════════════════════════════════════════════════
   v33.0.10 新功能(2026-06-27):AI 助理化 Batch3 — 判断(4 项新增 + 2 项复用)
     定位升级第三步:把"判断/取舍"半自动化。全部"人在环中":简报/今日规划/降温
@@ -1582,8 +1615,8 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-icon">🌿</div>
-      <h1>花花食界客户与任务管理系统</h1>
-      <p>内部专用 · v3.3</p>
+      <h1>花花食界AI助理</h1>
+      <p>内部专用</p>
     </div>
     <div class="login-field">
       <label>公司邮箱</label>
@@ -1618,7 +1651,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-icon">🌿</div>
         <div>
           <div class="sb-name">花花食界</div>
-          <div class="sb-sub">客户与任务管理系统 · v3.3</div>
+          <div class="sb-sub">AI助理</div>
         </div>
       </div>
     </div>
@@ -1700,7 +1733,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.10 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.12 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -1710,6 +1743,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <span class="tb-title" id="tb-title">仪表盘</span>
       </div>
       <div class="tb-right">
+        <button class="btn btn-ai btn-sm" id="cmdbar-btn" onclick="openCmdBar()" title="AI 命令栏(Ctrl/⌘ + K):导航 / 执行动作 / 查询">⌘ 命令</button>
         <div class="alert-pill" id="alert-pill" style="display:none"
           onclick="nav(document.querySelector('[data-page=customers]'),'customers')">
           <span id="alert-text">⚠ 0 逾期</span>
@@ -3716,7 +3750,7 @@ function renderDash(){
   <div class="welcome">
     <div class="wc-text">
       <h2>${gr}，${h(currentUser?.name||'用户')}！今天 ${today()} 星期${wkd}</h2>
-      <p>花花食界客户与任务管理系统 · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 · ${myT.length} 个任务 🌿</p>
+      <p>花花食界AI助理 · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 · ${myT.length} 个任务 🌿</p>
     </div>
     <div class="wc-ico">🌿</div>
   </div>
@@ -6085,7 +6119,7 @@ ${blockerBlock}
 ${progBlock}
 
 <p style="margin-top:24pt;font-size:9pt;color:#6b7280;border-top:1pt solid #e5e7eb;padding-top:8pt;text-align:center">
-  北京花花食界食品科技有限公司 · 客户与任务管理系统 · 任务模块 · 导出时间 ${new Date().toLocaleString('zh-CN')}
+  北京花花食界食品科技有限公司 · AI助理 · 任务模块 · 导出时间 ${new Date().toLocaleString('zh-CN')}
 </p>
 </body></html>`.trim();
 
@@ -10984,7 +11018,7 @@ function addToCalendar({title,date,description,location=''}){
   const uid=gid()+'@huahua-crm';
   const ics=[
     'BEGIN:VCALENDAR','VERSION:2.0',
-    'PRODID:-//花花食界 客户与任务管理系统//CN',
+    'PRODID:-//花花食界AI助理//CN',
     'CALSCALE:GREGORIAN','METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `DTSTART;TZID=Asia/Shanghai:${d}T090000`,
@@ -11381,7 +11415,7 @@ ${(()=>{ const td=getTasksReportData(r.from,r.to,isAdmin()?repState.mgr:null); r
   const tasksData = getTasksReportData(r.from, r.to, isAdmin()?repState.mgr:null);
   if(tasksData.hasData) md += '\n' + tasksData.markdown;
 
-  md+=`\n---\n\n*本报告由花花食界客户与任务管理系统自动生成 · v28 (2.0)*`;
+  md+=`\n---\n\n*本报告由花花食界AI助理自动生成*`;
   repState.report=md;repState.done=true;repState.loading=false;
   repState.isLocalDone=true;repState.source='local';
   refreshReport();toast('周报生成成功！可点击"🤖 AI精炼"进一步优化');
@@ -11522,7 +11556,7 @@ function doExportDoc(fileBase){
 <body>
 ${htmlBody}
 <p style="margin-top:24pt;font-size:10pt;color:#6b7280;border-top:1pt solid #e5e7eb;padding-top:8pt">
-  北京花花食界食品科技有限公司 · 客户与任务管理系统导出 · ${new Date().toLocaleString('zh-CN')}
+  北京花花食界食品科技有限公司 · AI助理导出 · ${new Date().toLocaleString('zh-CN')}
 </p>
 </body></html>`.trim();
 
@@ -12078,7 +12112,7 @@ function doExportFull(){
     const wkFU=DB.followups.filter(f=>f.createdAt>=wr.from&&f.createdAt<=wr.to);
     // 概览 sheet 数据
     const summaryData=[
-      ['花花食界 客户与任务管理系统 · 数据汇总报表',''],
+      ['花花食界AI助理 · 数据汇总报表',''],
       ['导出时间', new Date().toLocaleString('zh-CN')],
       ['导出人', currentUser?.name||'—'],
       ['',''],
@@ -13926,6 +13960,268 @@ ${summary}`;
       <button class="btn btn-ai" onclick="openTodayPlan()">🔄 重新生成</button>
     </div>`, 720);
 }
+
+// ══════════════════════════════════════════════════════════
+// v33.0.11 Batch4 — 全局 AI 命令栏(问 + 令)· 调度器,非执行器
+//   红线:命令栏自身绝不写库/发消息/改派/删除;"令"只路由到既有动作函数
+//   (它们自带预览/确认);"问"严格只读、只用 visibleXxx、喂 AI 用预聚合摘要。
+//   复用 callAI / _aiParseObj / _aiMatchCustomer / nav + PAGE_META / mdRender / h /
+//   weekRange / today / du / normTaskStatus + 既有动作函数。专用浮层 #cmdbar-ov。
+// ══════════════════════════════════════════════════════════
+function openCmdBar(){
+  if(!currentUser){ toast('请先登录','err'); return; }
+  if(document.getElementById('cmdbar-ov')){ document.getElementById('cmdbar-input')?.focus(); return; }
+  const o=document.createElement('div'); o.className='overlay'; o.id='cmdbar-ov';
+  o.style.zIndex='1300'; o.style.alignItems='flex-start';
+  o.onclick=e=>{ if(e.target===o) closeCmdBar(); };
+  o.innerHTML=`<div class="modal" style="max-width:640px;margin-top:8vh">
+    <div style="padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">⌘</span>
+        <input id="cmdbar-input" autocomplete="off" spellcheck="false"
+          placeholder="问点什么或下个指令… 例:本周跟进了几家 / 去客户列表 / 给XX公司起草话术 / 今日规划"
+          style="flex:1;border:none;outline:none;font-size:15px;background:transparent;color:var(--ink)"
+          onkeydown="_cmdBarKey(event)">
+        <button class="btn btn-ai btn-sm" id="cmdbar-go" onclick="_cmdBarSubmit()">↵ 执行</button>
+      </div>
+      <div style="font-size:11px;color:var(--ms);margin-top:7px">Enter 执行 · Esc 关闭 · 支持「导航 / 执行动作 / 只读查询」三类</div>
+    </div>
+    <div id="cmdbar-result" style="border-top:1px solid var(--sv);padding:12px 16px;max-height:56vh;overflow-y:auto;display:none"></div>
+  </div>`;
+  document.body.appendChild(o);
+  setTimeout(()=>document.getElementById('cmdbar-input')?.focus(), 40);
+}
+function closeCmdBar(){ const o=document.getElementById('cmdbar-ov'); if(o) o.remove(); }
+function _cmdBarKey(e){
+  if(e.key==='Enter'){ e.preventDefault(); _cmdBarSubmit(); }
+  else if(e.key==='Escape'){ e.preventDefault(); closeCmdBar(); }
+}
+function _cmdShow(html){
+  const r=document.getElementById('cmdbar-result');
+  if(r){ r.style.display='block'; r.innerHTML=html; }
+}
+
+async function _cmdBarSubmit(){
+  const q=(document.getElementById('cmdbar-input')?.value||'').trim();
+  if(q.length<1){ return; }
+  const go=document.getElementById('cmdbar-go');
+  if(go){ go.disabled=true; go.textContent='…'; }
+  _cmdShow('<span style="color:var(--ms)">🤖 正在理解你的意图…</span>');
+  const intent=await _cmdClassify(q);
+  if(go){ go.disabled=false; go.textContent='↵ 执行'; }
+  if(!intent){ _cmdShow('<span style="color:#dc2626">未能理解,请换种说法。也可直接说「去客户列表」「本周跟进几家」</span>'); return; }
+  _cmdRoute(intent, q);
+}
+
+// —— 意图分类(1 次 callAI,严格 JSON,枚举页面/动作降幻觉)——
+async function _cmdClassify(q){
+  const pages='dashboard(仪表盘),messages(消息中心),customers(客户列表),followups(跟进记录),smsLogs(短信记录),tasks(我的任务),teamTasks(团队任务),taskFollow(任务跟进),archive(归档库),report(周报管理),users(用户管理),ai(AI设置)';
+  const actions=[
+    'record_followup=记一条跟进/速记跟进',
+    'record_task=记一个任务/速记任务',
+    'draft_fu_script=给某客户起草跟进话术(需customerName)',
+    'premeeting_brief=给某客户做会前简报(需customerName)',
+    'assess_health=评估某客户健康度(需customerName)',
+    'remind_task=催办某任务进度(需taskTitle)',
+    'meeting_task=给某任务发起会议邀请(需taskTitle)',
+    'breakdown_task=拆解某任务为子项(需taskTitle)',
+    'suggest_next=某任务下一步行动建议(需taskTitle)',
+    'today_plan=今日规划',
+    'cooling_list=查看降温客户清单',
+    'my_weekly_report=生成我的本周周报'
+  ].join('; ');
+  const sys=`你是企业 CRM 系统命令栏的意图分类器。把用户中文输入分类,只输出**一个 JSON 对象**,无解释、无 markdown:
+{"mode":"navigate|command|ask","page":"","action":"","customerName":"","taskTitle":"","note":"","locallyAnswerable":false}
+规则:
+- navigate:用户想去某页面/打开某模块。page 只能从这些键里选(选键名,不要中文):${pages}
+- command:用户想执行某动作。action 只能从这些键里选:${actions}。动作针对客户填 customerName;针对任务填 taskTitle。
+- ask:用户在提问/查询。若是关于本人数据的计数/清单类(本周跟进几家、我的逾期任务、降温客户等),locallyAnswerable=true,否则 false。
+- 只能在给定的 page/action 集合里选;选不到就归为 ask。
+- 不要编造客户名或任务名;识别不到就留空字符串。`;
+  const result=await callAI({system:sys, prompt:'用户输入:'+q, maxTokens:300, _action:'cmdbar_intent', _actionLabel:'命令栏意图', _cost:1});
+  if(!result) return null;
+  const o=_aiParseObj(result);
+  if(!o || !o.mode){ return {mode:'ask'}; }   // 解析失败 → 回退当作 ask
+  return o;
+}
+
+// —— 路由 ——
+function _cmdRoute(intent, q){
+  const mode=intent.mode;
+  if(mode==='navigate' && intent.page && PAGE_META[intent.page]){
+    closeCmdBar();
+    nav(document.querySelector('[data-page='+intent.page+']'), intent.page);
+    return;
+  }
+  if(mode==='command' && intent.action){ _cmdRouteCommand(intent, q); return; }
+  // 其余 → 只读问答
+  _cmdAnswer(q, intent);
+}
+
+function _cmdRouteCommand(intent, q){
+  const a=intent.action;
+  // 无实体动作:直接打开既有动作函数(自带预览/确认)
+  const noEntity={
+    record_followup:()=>{ closeCmdBar(); openAiQuickFU(''); },
+    record_task:()=>{ closeCmdBar(); openAiQuickTask(); },
+    today_plan:()=>{ closeCmdBar(); openTodayPlan(); },
+    cooling_list:()=>{ closeCmdBar(); openCoolingList(); },
+    my_weekly_report:()=>{ closeCmdBar(); nav(document.querySelector('[data-page=report]'),'report'); setTimeout(()=>generateMyWeeklyReport(), 150); },
+  };
+  if(noEntity[a]){ noEntity[a](); return; }
+
+  // 客户实体动作
+  if(a==='draft_fu_script' || a==='premeeting_brief' || a==='assess_health'){
+    let matches=_cmdMatchCustomers(intent.customerName);
+    if(matches.length===0){
+      const m=_aiMatchCustomer(intent.customerName);   // 复用 Batch1 兜底
+      if(m) matches=[m];
+    }
+    if(matches.length===1){ closeCmdBar(); _cmdRunCustomerAction(a, matches[0].id); return; }
+    if(matches.length===0){ _cmdShow(`未找到客户「${h(intent.customerName||'')}」,请确认名称或在客户列表查看`); return; }
+    _cmdShowCandidates('cust', a, matches, intent.customerName); return;
+  }
+  // 任务实体动作
+  if(a==='remind_task' || a==='meeting_task' || a==='breakdown_task' || a==='suggest_next'){
+    const matches=_cmdMatchTasks(intent.taskTitle);
+    if(matches.length===1){ closeCmdBar(); _cmdRunTaskAction(a, matches[0].id); return; }
+    if(matches.length===0){ _cmdShow(`未找到任务「${h(intent.taskTitle||'')}」`); return; }
+    _cmdShowCandidates('task', a, matches, intent.taskTitle); return;
+  }
+  // 未知动作 → 回退问答
+  _cmdAnswer(q, intent);
+}
+
+// 实体匹配(只用本人可见数据)
+function _cmdMatchCustomers(name){
+  const n=String(name||'').trim().toLowerCase();
+  if(!n) return [];
+  const cs=visibleCustomers();
+  const exact=cs.filter(c=>(c.companyName||'').toLowerCase()===n);
+  if(exact.length) return exact.slice(0,8);
+  const sub=cs.filter(c=>{
+    const cn=(c.companyName||'').toLowerCase(), ct=(c.contactName||'').toLowerCase();
+    return (cn&&(cn.includes(n)||n.includes(cn))) || (ct&&ct.includes(n));
+  });
+  return sub.slice(0,8);
+}
+function _cmdMatchTasks(title){
+  const n=String(title||'').trim().toLowerCase();
+  if(!n) return [];
+  const ts=visibleTasks();
+  const exact=ts.filter(t=>(t.title||'').toLowerCase()===n);
+  if(exact.length) return exact.slice(0,8);
+  const sub=ts.filter(t=>{ const tt=(t.title||'').toLowerCase(); return tt&&(tt.includes(n)||n.includes(tt)); });
+  return sub.slice(0,8);
+}
+
+// 候选列表(实体不唯一时让用户点选,绝不默认选第一个)
+function _cmdShowCandidates(kind, action, matches, name){
+  const rows=matches.map(x=>{
+    if(kind==='cust'){
+      return `<button class="btn btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:6px" onclick="closeCmdBar();_cmdRunCustomerAction('${action}','${x.id}')">${h(x.companyName||x.contactName||'(未命名)')} <span style="color:var(--ms);font-size:11px">${h(x.contactName||'')}${x.customerLevel?' · '+x.customerLevel+'级':''}</span></button>`;
+    }
+    return `<button class="btn btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:6px" onclick="closeCmdBar();_cmdRunTaskAction('${action}','${x.id}')">${h(x.title||'(无标题)')} <span style="color:var(--ms);font-size:11px">${TSK_STATUS[normTaskStatus(x.status)]?.label||x.status||''}</span></button>`;
+  }).join('');
+  _cmdShow(`<div style="font-size:13px;margin-bottom:8px">匹配到多个「${h(name||'')}」,请选择一个:</div>${rows}`);
+}
+function _cmdRunCustomerAction(action, custId){
+  if(action==='draft_fu_script') aiDraftFUScript(custId);
+  else if(action==='premeeting_brief') aiPreMeetingBrief(custId);
+  else if(action==='assess_health') aiAssessHealthOne(custId);
+}
+function _cmdRunTaskAction(action, taskId){
+  if(action==='remind_task') openTaskDetail(taskId);   // 命令栏不直接发催办,改为打开任务详情由用户点「⏰ 催进度」(避免无确认对外发消息)
+  else if(action==='meeting_task') openMeetingForm(taskId);
+  else if(action==='breakdown_task') openTaskForm(taskId);   // 编辑表单内含「🔍 AI 拆解」
+  else if(action==='suggest_next') aiSuggestNextAction(taskId);
+}
+
+// —— 只读问答:优先本地确定性,AI 兜底(只喂预聚合摘要)——
+async function _cmdAnswer(q, intent){
+  const local=_cmdLocalAnswer(q);
+  if(local){ _cmdShow(local); return; }
+  _cmdShow('<span style="color:var(--ms)">🤖 正在查询…</span>');
+  const ctx=_cmdAskContext();
+  const sys='你是 CRM 只读查询助手。只能依据"数据摘要"回答,不得编造;摘要里没有就回答"暂无相关数据"。中文,简洁,可用 markdown。';
+  const prompt=`用户问题:${q}\n\n以下是当前用户(本人可见范围)的预聚合数据摘要:\n${ctx}\n\n请基于以上摘要回答,不要编造摘要外的细节。`;
+  const result=await callAI({system:sys, prompt, maxTokens:800, _action:'cmdbar_ask', _actionLabel:'命令栏问答', _cost:1});
+  if(!result){ _cmdShow('<span style="color:#dc2626">查询失败,请重试</span>'); return; }
+  _cmdShow(`<div class="rep-content" style="font-size:13px;line-height:1.8">${mdRender(result)}</div>`);
+}
+
+function _cmdTaskListHtml(title, list, extra){
+  if(!list.length) return `<div style="font-size:14px">${title}:暂无 ✅</div>`;
+  const rows=list.slice(0,12).map(t=>`<li>${h(t.title||'')} <span style="color:var(--ms);font-size:11px">${TSK_STATUS[normTaskStatus(t.status)]?.label||t.status} · ${h(extra(t))}</span></li>`).join('');
+  return `<div style="font-size:14px;margin-bottom:6px">${title}</div><ul style="margin:0;padding-left:18px;line-height:1.85;font-size:13px">${rows}</ul>`;
+}
+// 本地确定性回答(零 AI 成本);命中返回 html,未命中返回 null
+function _cmdLocalAnswer(q){
+  const s=String(q||'');
+  const wr=weekRange(), td=today();
+  // 本周跟进
+  if(/本周|这周/.test(s) && /跟进/.test(s)){
+    const fus=visibleFollowups().filter(f=>f.createdAt>=wr.from && f.createdAt<=wr.to);
+    const custN=new Set(fus.map(f=>f.customerId)).size;
+    return `<div style="font-size:14px">📊 本周(${wr.from} ~ ${wr.to})共 <b>${fus.length}</b> 条跟进,覆盖 <b>${custN}</b> 家客户。</div>`;
+  }
+  // 逾期任务
+  if(/逾期|过期/.test(s) && /任务/.test(s)){
+    const list=myTasks().filter(t=>t.status!=='done' && t.status!=='archived' && t.dueDate && t.dueDate<td);
+    return _cmdTaskListHtml(`⏰ 我的逾期任务(${list.length})`, list, t=>`逾期 ${-du(t.dueDate)} 天`);
+  }
+  // 今日到期
+  if(/今天|今日/.test(s) && /(到期|截止)/.test(s) && /任务/.test(s)){
+    const list=myTasks().filter(t=>t.status!=='done' && t.status!=='archived' && t.dueDate===td);
+    return _cmdTaskListHtml(`📅 今日到期任务(${list.length})`, list, ()=>'今天截止');
+  }
+  // 降温客户
+  if(/降温|久未跟进|快流失|要流失/.test(s)){
+    const cl=_coolingCustomers();
+    const rows=cl.slice(0,10).map(x=>`<li>${h(x.c.companyName||'')}(${x.c.customerLevel}级,${x.never?'从未跟进':x.days+'天未跟进'})</li>`).join('');
+    return `<div style="font-size:14px;margin-bottom:6px">❄️ 降温客户共 <b>${cl.length}</b> 家${cl.length?',Top:':'。'}</div>`
+      + (cl.length?`<ul style="margin:0;padding-left:18px;line-height:1.85;font-size:13px">${rows}</ul><div style="margin-top:8px"><button class="btn btn-sm" onclick="closeCmdBar();openCoolingList()">打开降温清单</button></div>`:'');
+  }
+  // 我的任务状态分布
+  if(/我的任务|任务/.test(s) && /(状态|分布|多少|几个|进度)/.test(s)){
+    const mine=myTasks();
+    const by={}; mine.forEach(t=>{ const k=TSK_STATUS[normTaskStatus(t.status)]?.label||t.status; by[k]=(by[k]||0)+1; });
+    const rows=Object.entries(by).map(([k,v])=>`<li>${h(k)}:<b>${v}</b></li>`).join('')||'<li>暂无任务</li>';
+    return `<div style="font-size:14px;margin-bottom:6px">📋 我的任务共 <b>${mine.length}</b> 个,状态分布:</div><ul style="margin:0;padding-left:18px;line-height:1.85;font-size:13px">${rows}</ul>`;
+  }
+  return null;
+}
+// 预聚合摘要(统计数字 + 少量标题,非原始全表;只用本人可见数据)
+function _cmdAskContext(){
+  const wr=weekRange(), td=today();
+  const fus=visibleFollowups().filter(f=>f.createdAt>=wr.from && f.createdAt<=wr.to);
+  const custWeek=new Set(fus.map(f=>f.customerId)).size;
+  const mine=myTasks();
+  const by={}; mine.forEach(t=>{ const k=TSK_STATUS[normTaskStatus(t.status)]?.label||t.status; by[k]=(by[k]||0)+1; });
+  const overdue=mine.filter(t=>t.status!=='done' && t.status!=='archived' && t.dueDate && t.dueDate<td);
+  const dueToday=mine.filter(t=>t.status!=='done' && t.status!=='archived' && t.dueDate===td);
+  const cl=_coolingCustomers();
+  const vc=visibleCustomers();
+  const lines=[];
+  lines.push(`本人可见客户:${vc.length} 家(A级 ${vc.filter(c=>c.customerLevel==='A').length} 家)`);
+  lines.push(`本周(${wr.from}~${wr.to})跟进:${fus.length} 条,覆盖 ${custWeek} 家客户`);
+  lines.push(`我的任务:共 ${mine.length} 个;状态分布:${Object.entries(by).map(([k,v])=>k+v).join('、')||'无'}`);
+  lines.push(`我的逾期任务:${overdue.length} 个${overdue.length?'(如:'+overdue.slice(0,5).map(t=>t.title).join('、')+')':''}`);
+  lines.push(`今日到期任务:${dueToday.length} 个${dueToday.length?'(如:'+dueToday.slice(0,5).map(t=>t.title).join('、')+')':''}`);
+  lines.push(`降温客户:${cl.length} 家${cl.length?'(Top:'+cl.slice(0,5).map(x=>x.c.companyName).join('、')+')':''}`);
+  return lines.join('\n');
+}
+
+// 键盘快捷键 Ctrl/⌘+K(带修饰键,不与输入框冲突);ESC 关闭
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey) && (e.key==='k'||e.key==='K')){
+    e.preventDefault();
+    if(!currentUser) return;
+    if(document.getElementById('cmdbar-ov')) closeCmdBar(); else openCmdBar();
+    return;
+  }
+  if(e.key==='Escape' && document.getElementById('cmdbar-ov')){ closeCmdBar(); }
+});
 
 
 function openModal(title,body,footer){
