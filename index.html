@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界客户与任务管理系统 · v33.0.8 (PWA)</title>
+<title>花花食界客户与任务管理系统 · v33.0.9 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,26 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.9 新功能(2026-06-27):AI 助理化 Batch2 — 起草(三个子功能,纯前端,零 schema 变更)
+    定位升级第二步:把"想措辞/想怎么说"自动化,让员工少费脑。全部"人在环中":
+    AI 只起草/建议,预览或填入输入框后由用户确认,绝不自动写库/自动对外发送。
+    · ✍️ 跟进话术起草:客户详情页 + 跟进表单新增「✍️ AI 起草话术」,取客户档案
+      + 最近 3-5 条跟进 → AI 生成 2-3 种语气(正式/亲切/促单)可直接发出的话术,
+      预览弹窗内「复制」/「填入跟进内容」。区别于既有 aiSuggestNextAction(给策略),
+      本功能给"具体怎么开口说"。复用 callAI / _parseAIJsonArray / h() / saveFUToDB。
+    · ✍️ 站内消息起草:任务指派(新建任务表单新增"指派留言")、催办、会议邀请三处
+      旁新增「✍️ AI 起草」,把上下文喂给 callAI 起草礼貌清晰含行动项的正文 →
+      填入对应输入框,用户可改后再点原有按钮发送(AI 不直接调 sendMessage)。
+    · 🤖 个人周报自动生成:周报页新增「🤖 一键生成我的周报」,自动聚合本人本周
+      (周一—周日)created_by 跟进 + 本人参与任务的进展/状态变化 → 流式生成草稿,
+      预览可编辑后再走既有保存/导出。聚合文本截断兜底,maxTokens=8000 防截断。
+    · 复用既有:callAI(stream/onChunk)/ _parseAIJsonArray / _aiParseObj / sendMessage /
+      saveFUToDB / saveTaskToDB / openFUForm / weekRange / isTaskParticipant / h() / 既有 modal。
+      未改 MiniSupabase / RLS / SW 逻辑(仅 bump 版本号),零新 CDN、零新表/列。
+    · 顺手修 bug:任务指派默认通知正文里"截止日期/优先级"取错字段(obj.deadline
+      不存在、priority 显示英文 key),改为 obj.dueDate + TSK_PRIORITY 中文标签。
+    ⚠ 发版:bump sw.js 的 SW_VERSION 到 'huahua-crm-v33.0.9'。
   ══════════════════════════════════════════════════════════════════
   v33.0.8 新功能(2026-06-18):AI 助理化 Batch1 — AI 速记(自然语言/语音录入)
     定位升级第一步:把"录入"自动化,让员工少打字。
@@ -1652,7 +1672,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.8 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · 客户与任务管理系统 v33.0.9 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -2656,7 +2676,9 @@ async function remindTaskProgress(taskId){
   <div class="modal-body">
     <div style="margin-bottom:10px;color:var(--sl);font-size:13px">任务:<b>${h(t.title||'')}</b><br/>接收方:<b>${h(t.assigneeName||'')}</b></div>
     <div class="fg full">
-      <label>催办留言</label>
+      <label>催办留言
+        <button type="button" class="btn btn-ai btn-sm" style="margin-left:8px;padding:3px 9px;font-size:11px" onclick="aiDraftMsg('remind','${taskId}',this)" title="AI 起草礼貌清晰的催办正文">✍️ AI 起草</button>
+      </label>
       <textarea id="remind-msg" rows="4" placeholder="请简要说明你希望了解什么进度...">本周可以同步一下进展吗?如有阻碍请尽早告知。</textarea>
       <div style="font-size:11px;color:var(--ms);margin-top:5px">⚠ 24 小时内同一任务只能催办一次</div>
     </div>
@@ -2965,7 +2987,9 @@ function openMeetingForm(taskId){
         </div>
       </div>
       <div class="fg full">
-        <label>议题/备注</label>
+        <label>议题/备注
+          <button type="button" class="btn btn-ai btn-sm" style="margin-left:8px;padding:3px 9px;font-size:11px" onclick="aiDraftMsg('meeting','${taskId}',this)" title="AI 起草会议议题/邀请正文">✍️ AI 起草</button>
+        </label>
         <textarea id="mt-notes" rows="3" placeholder="本次会议希望讨论什么...">同步任务进展、对齐下一步行动项</textarea>
       </div>
     </div>
@@ -4952,6 +4976,12 @@ function openTaskForm(id){
       <select id="tf-assignee">
         ${assignableUsers.map(u=>`<option value="${u.id}" ${(t?t.assigneeId:currentUser?.id)===u.id?'selected':''}>${h(u.name||u.email||'未命名')}</option>`).join('')}
       </select></div>
+    <div class="fg full"><label>指派留言(指派给他人时随通知发送,选填)
+        <button type="button" class="btn btn-ai btn-sm" style="margin-left:8px;padding:3px 9px;font-size:11px" onclick="aiDraftMsg('assign','',this)" title="AI 起草礼貌清晰、含行动项的指派留言">✍️ AI 起草</button>
+      </label>
+      <textarea id="tf-assign-msg" placeholder="给负责人的话(如:这个客户比较重要,麻烦本周内先联系一次…)。留空则发送系统默认通知。" style="min-height:56px"></textarea>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 仅当负责人是他人时,保存后随"任务指派"消息一并发送;AI 起草后可自行修改。</div>
+    </div>
     <div class="fg"><label>所属部门/项目</label>
       <select id="tf-dept">
         <option value="" ${!t?.departmentId?'selected':''}>— 无 —</option>
@@ -5033,9 +5063,12 @@ async function saveTask(){
     createdByName: existing?.createdByName||currentUser?.name||'',
   };
 
+  // v33.0.9 Batch2:可选"指派留言"(AI 起草或手填),随任务指派消息发送
+  const assignMsg = document.getElementById('tf-assign-msg')?.value.trim()||'';
+
   const btn=document.querySelector('.modal-ft .btn-p');
   if(btn){btn.disabled=true;btn.textContent='保存中...';}
-  await saveTaskToDB(obj, existing);
+  await saveTaskToDB(obj, existing, assignMsg);
   if(btn){btn.disabled=false;btn.textContent=editingTaskId?'保存修改':'创建任务';}
   closeModal();
   toast(editingTaskId?`"${obj.title}" 已更新`:`"${obj.title}" 创建成功`);
@@ -5044,7 +5077,7 @@ async function saveTask(){
 // ══════════════════════════════════════════════════════════
 // ── 任务 CRUD (v27 标准三件套)
 // ══════════════════════════════════════════════════════════
-async function saveTaskToDB(obj, existing){
+async function saveTaskToDB(obj, existing, assignMsg){
   // B3 修复:确保 assignee 在 department 中,否则改派/创建后,assignee 因 RLS 看不到任务
   if(obj.departmentId && obj.assigneeId && obj.assigneeId !== currentUser?.id){
     const isMember = DB.departmentMembers.some(m=>
@@ -5120,11 +5153,15 @@ async function saveTaskToDB(obj, existing){
   const isNewAssignment = !existing && obj.assigneeId && obj.assigneeId !== currentUser?.id;
   if(obj.assigneeId && (isNewAssignment || (assigneeChanged && obj.assigneeId !== currentUser?.id))){
     // 通知接收方
+    // v33.0.9 Batch2:若指派方填写/AI 起草了"指派留言",用它作为正文(人在环中);否则用默认通知
+    const _msg = (typeof assignMsg==='string' && assignMsg.trim())
+      ? `${currentUser?.name||'某人'} 把任务「${obj.title||''}」指派给你:\n\n${assignMsg.trim()}\n\n（截止日期:${obj.dueDate||'未设置'} · 优先级:${TSK_PRIORITY[obj.priority]?.label||obj.priority||'普通'}）请确认接收。`
+      : `${currentUser?.name||'某人'} 把任务「${obj.title||''}」指派给你。\n${obj.description?'描述:'+obj.description.slice(0,150):''}\n${obj.dueDate?'截止日期:'+obj.dueDate:''}\n${obj.priority?'优先级:'+(TSK_PRIORITY[obj.priority]?.label||obj.priority):''}\n请确认接收并尽快开始。`;
     sendMessage({
       toUser: obj.assigneeId,
       type: 'task_assigned',
       title: `${isNewAssignment ? '新任务指派' : '任务改派'}:${obj.title||''}`,
-      content: `${currentUser?.name||'某人'} 把任务「${obj.title||''}」指派给你。\n${obj.description?'描述:'+obj.description.slice(0,150):''}\n${obj.deadline?'截止日期:'+obj.deadline:''}\n${obj.priority?'优先级:'+obj.priority:''}\n请确认接收并尽快开始。`,
+      content: _msg,
       relatedTaskId: obj.id,
     });
     // 若是改派,新接收方需要重新确认 → 清空 accepted_at
@@ -11109,6 +11146,11 @@ function renderReport(){
         ${repState.loading?(repState.useAI?'🤖 AI生成中...':'⏳ 生成中...'):(repState.useAI?'🤖 AI直接生成':'📊 本地生成')}
       </button>
 
+      <!-- v33.0.9 Batch2:一键生成"我的本周周报"(自动聚合本人数据,无需手填) -->
+      <button class="btn btn-ai" style="width:100%;justify-content:center;padding:9px;margin-bottom:8px" onclick="generateMyWeeklyReport()" ${repState.loading||repState.aiRefining?'disabled':''} title="自动聚合本人本周(周一—周日)跟进记录与参与任务的进展,AI 草拟我的本周周报">
+        🤖 一键生成我的周报
+      </button>
+
       <!-- 上传已有周报 -->
       <button class="btn" style="width:100%;justify-content:center;padding:8px;margin-bottom:13px" onclick="document.getElementById('rep-upload').click()">
         📂 上传已有周报
@@ -12567,6 +12609,7 @@ function openCustDetail(id){
     ${(c.address||c.city)?`<button class="tool-btn" onclick="navigateTo('${(c.address||c.city).replace(/'/g,"\\'")}')">🧭 导航前往</button>`:''}
     <button class="tool-btn" onclick="generateQRCode('${id}')">📇 名片二维码</button>
     <button class="btn btn-ai btn-sm" onclick="aiCustomerAdvice('${id}')" id="ai-advice-btn-${id}">💡 AI建议</button>
+    <button class="btn btn-ai btn-sm" onclick="aiDraftFUScript('${id}')" title="AI 起草可直接发出的跟进话术(正式/亲切/促单)">✍️ AI 起草话术</button>
   </div>
   <div id="ai-advice-${id}" style="display:none;padding:10px;background:#f5f3ff;border-radius:8px;margin-bottom:12px;border:1px solid #e9d5ff;font-size:12px"></div>`;
 
@@ -12705,6 +12748,7 @@ function openFUForm(id,defaultCid){
       </div>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
         <button type="button" id="ai-sum-btn" class="btn btn-ai btn-sm" onclick="aiSummarizeFU()">🤖 AI总结</button>
+        <button type="button" class="btn btn-ai btn-sm" onclick="aiDraftFUScriptFromForm()" title="AI 起草可直接发出的跟进话术(正式/亲切/促单)">✍️ AI 起草话术</button>
         <button type="button" class="tool-btn" onclick="captureLocation()" id="ff-loc-btn" style="display:none">📍 记录位置</button>
       </div>
       <span class="err-m" id="e-co2"></span>
@@ -13113,6 +13157,344 @@ async function _aiQuickTaskSave(){
   if(btn){btn.disabled=false;btn.textContent='确认创建';}
   closeModal();
   toast(`"${obj.title}" 已创建 ✓`);
+}
+
+// ══════════════════════════════════════════════════════════
+// v33.0.9 Batch2 — 起草(跟进话术 / 站内消息 / 个人周报)
+//   全部"人在环中":AI 只起草,预览或填入输入框后由用户确认。
+//   复用 callAI / _parseAIJsonArray / saveFUToDB / sendMessage / weekRange 等既有管线。
+// ══════════════════════════════════════════════════════════
+
+// —— 通用复制(clipboard + execCommand 降级)——
+function _aiCopyText(text){
+  if(!text) return;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(()=>toast('✓ 已复制到剪贴板')).catch(()=>{ _aiCopyFallback(text); });
+  }else{ _aiCopyFallback(text); }
+}
+function _aiCopyFallback(text){
+  const ta=document.createElement('textarea'); ta.value=text;
+  ta.style.position='fixed'; ta.style.left='-9999px'; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('✓ 已复制到剪贴板'); }catch(e){ toast('复制失败,请手动复制','err'); }
+  document.body.removeChild(ta);
+}
+
+// —— 独立浮层(专用 id,可叠在既有 modal 之上,不与 #modal-ov 冲突)——
+function _closeAiOverlay(){ const o=document.getElementById('ai-draft-ov'); if(o) o.remove(); }
+function _openAiOverlay(html, maxW){
+  _closeAiOverlay();
+  const o=document.createElement('div'); o.className='overlay'; o.id='ai-draft-ov';
+  o.style.zIndex='1200';   // 高于 .overlay(z-index:500),叠在表单/详情弹窗之上
+  o.onclick=e=>{ if(e.target===o) _closeAiOverlay(); };
+  const d=document.createElement('div'); d.className='modal'; d.style.maxWidth=(maxW||640)+'px';
+  d.innerHTML=html; o.appendChild(d); document.body.appendChild(o);
+}
+
+// ───────────────────────── 2-1 跟进话术起草 ─────────────────────────
+let _fuScriptDrafts = [];   // [{tone, text}]
+let _fuScriptCustId = '';
+
+// 从跟进表单触发:取当前已选客户
+function aiDraftFUScriptFromForm(){
+  const cid = (typeof getSearchableValue==='function' ? getSearchableValue('ff-cu') : '') || '';
+  if(!cid){ toast('请先选择关联客户,再起草话术','err'); return; }
+  aiDraftFUScript(cid);
+}
+
+async function aiDraftFUScript(custId){
+  const c = DB.customers.find(x=>x.id===custId);
+  if(!c){ toast('客户不存在','err'); return; }
+  _fuScriptCustId = custId;
+
+  // 最近 3-5 条跟进(可见范围内)
+  const fus = DB.followups
+    .filter(f=>f.customerId===custId && canViewFollowup(f))
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    .slice(0,5);
+
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">✍️ AI 起草跟进话术</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body" style="text-align:center;padding:36px 20px;color:var(--ms)">
+      <div style="font-size:34px;margin-bottom:10px">🤖</div>
+      <div style="font-size:14px;font-weight:600;color:var(--sl)">正在为 ${h(c.companyName||c.contactName||'该客户')} 起草话术…</div>
+      <div class="dots" style="margin-top:12px"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>`, 640);
+
+  const hist = fus.length
+    ? fus.slice().reverse().map(f=>{
+        const ts = f.createdAt ? String(f.createdAt).slice(0,10) : '';
+        let line = `[${ts}][${f.type||'跟进'}] ${String(f.content||'').slice(0,120)}`;
+        if(f.demand) line += ` | 需求:${String(f.demand).slice(0,60)}`;
+        if(f.outcome) line += ` | 成果:${f.outcome}`;
+        if(f.nextAction) line += ` | 下一步:${String(f.nextAction).slice(0,60)}`;
+        return line;
+      }).join('\n')
+    : '(暂无历史跟进记录)';
+
+  const sys = `你是资深客户经理的沟通教练,擅长把客户情况转化为"可以直接发出去或当电话开场白"的中文话术。
+要求:
+- 输出**严格的 JSON 数组**,共 3 个对象,无任何解释、前后缀或 markdown 代码块。
+- 每个对象字段:tone(语气,只能是 "正式"、"亲切"、"促单" 三者之一,且三个对象分别对应这三种语气)、text(完整话术正文)。
+- text 是可直接复制发微信或作为电话开场白的完整一段话:称呼得体、结合该客户的具体情况与最近进展、自然引出下一步,礼貌不油腻。
+- text 每段约 60-160 字,口语自然,不要出现"尊敬的客户"这类模板腔,不要编造未提供的事实(价格/时间若未知则用"近期/方便时"等模糊表达)。
+- 只输出 JSON 数组本身。`;
+
+  const prompt = `请基于以下客户信息和最近跟进记录,生成 3 种语气(正式/亲切/促单)的跟进话术。
+
+【客户档案】
+公司:${c.companyName||'—'}
+联系人:${c.contactName||'—'}${c.contactTitle?'('+c.contactTitle+')':''}
+级别:${c.customerLevel||'—'}级  状态:${c.status||'—'}
+行业:${c.industry||'—'}  城市/地址:${c.city||''}${c.address?(' '+c.address):''}
+备注:${c.notes?String(c.notes).slice(0,120):'无'}
+
+【最近跟进记录(由旧到新)】
+${hist}
+
+请只输出 JSON 数组。`;
+
+  const result = await callAI({system:sys, prompt, maxTokens:1200, _action:'fu_script', _actionLabel:'AI起草话术', _cost:1});
+  if(!result){ _closeAiOverlay(); return; }   // callAI 失败已 toast
+
+  let arr = [];
+  try{
+    const r = _parseAIJsonArray(result);
+    arr = (r && r.parsed) ? r.parsed : [];
+  }catch(e){ arr = []; }
+  arr = (arr||[]).filter(o=>o && o.text).slice(0,3);
+  if(!arr.length){ toast('AI 未能生成话术,请稍后重试','err'); _closeAiOverlay(); return; }
+
+  _fuScriptDrafts = arr.map(o=>({tone:String(o.tone||'话术'), text:String(o.text||'')}));
+  _renderFUScriptPreview(c);
+}
+
+function _renderFUScriptPreview(c){
+  const toneStyle = {
+    '正式':'#1d4ed8','亲切':'#16a34a','促单':'#d97706'
+  };
+  const cards = _fuScriptDrafts.map((d,i)=>{
+    const col = toneStyle[d.tone] || '#6d28d9';
+    return `<div style="border:1px solid var(--sv);border-left:3px solid ${col};border-radius:8px;padding:11px 13px;margin-bottom:10px;background:#fff">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+        <span style="font-size:12px;font-weight:700;color:${col}">${h(d.tone)}</span>
+        <span style="font-size:11px;color:var(--ms)">${d.text.length} 字</span>
+      </div>
+      <div style="white-space:pre-wrap;font-size:13px;line-height:1.75;color:var(--ink)">${h(d.text)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">
+        <button class="btn btn-sm" onclick="_fuScriptCopy(${i})">📋 复制</button>
+        <button class="btn btn-p btn-sm" onclick="_fuScriptFill(${i})">↓ 填入跟进内容</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">✍️ 跟进话术 — ${h(c.companyName||c.contactName||'')}</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body">
+      <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:7px;padding:9px 12px;font-size:12px;color:#1e40af;line-height:1.7;margin-bottom:12px">
+        以下话术由 AI 起草,仅供参考。请结合实际再修改后使用 —— 「复制」可直接发微信,「填入跟进内容」会写进跟进记录草稿(确认保存才入库)。
+      </div>
+      ${cards}
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="_closeAiOverlay()">关闭</button>
+      <button class="btn btn-ai" onclick="aiDraftFUScript('${_fuScriptCustId}')">🔄 换一批</button>
+    </div>`, 660);
+}
+
+function _fuScriptCopy(idx){ _aiCopyText(_fuScriptDrafts[idx]?.text || ''); }
+
+function _fuScriptFill(idx){
+  const text = _fuScriptDrafts[idx]?.text || '';
+  if(!text) return;
+  const fill = ()=>{
+    const ta = document.getElementById('ff-co');
+    if(ta){
+      const cur = ta.value.trim();
+      ta.value = cur ? (cur + '\n\n' + text) : text;
+      ta.focus();
+      toast('已填入跟进内容,可修改后保存');
+    }
+  };
+  _closeAiOverlay();
+  if(document.getElementById('ff-co')){
+    fill();   // 跟进表单已打开:直接填入
+  }else{
+    // 从客户详情进入:关闭详情 → 打开跟进表单 → 填入
+    closeModal();
+    openFUForm(null, _fuScriptCustId);
+    setTimeout(fill, 100);
+  }
+}
+
+// ───────────────────────── 2-2 站内消息起草 ─────────────────────────
+// kind: 'remind'(催办) | 'meeting'(会议邀请) | 'assign'(任务指派)
+// 草稿填入对应输入框,用户改后再点原有"发送/创建"按钮(AI 不直接调 sendMessage)
+async function aiDraftMsg(kind, ctxId, btn){
+  let sys='', prompt='', targetId='', label='';
+
+  if(kind==='remind'){
+    const t = DB.tasks.find(x=>x.id===ctxId);
+    if(!t){ toast('任务不存在','err'); return; }
+    targetId='remind-msg'; label='催办留言';
+    sys='你是职场沟通助手,擅长写礼貌、清晰、对事不对人的催办消息。直接输出消息正文(中文,60-120字),不要前缀、不要署名、不要解释。';
+    prompt=`请为"催进度"场景起草一段站内消息正文,语气友好不施压,说明希望了解的进度并给出明确的小请求(如本周内同步进展/说明阻碍)。
+任务标题:${t.title||''}
+负责人:${t.assigneeName||''}
+当前状态:${TSK_STATUS[normTaskStatus(t.status)]?.label||t.status||''}(进度 ${t.progress||0}%)
+${t.dueDate?'截止日期:'+t.dueDate:''}`;
+  }else if(kind==='meeting'){
+    const t = DB.tasks.find(x=>x.id===ctxId);
+    targetId='mt-notes'; label='会议议题';
+    const mt = id=>document.getElementById(id)?.value||'';
+    sys='你是会议秘书,擅长写简洁清晰、含明确议题与行动项的会议邀请/议题说明。直接输出正文(中文,60-140字),不要前缀或解释。';
+    prompt=`请为一次会议起草"议题/备注"正文:列出本次会议要讨论的 2-4 个要点,并提示参会人需提前准备什么。语气专业友好。
+会议主题:${mt('mt-title')||(t?('讨论:'+(t.title||'')):'')}
+开始时间:${mt('mt-start')}
+结束时间:${mt('mt-end')}
+地点:${mt('mt-location')}
+${t?('关联任务:'+(t.title||'')):''}`;
+  }else if(kind==='assign'){
+    targetId='tf-assign-msg'; label='指派留言';
+    const gv = id=>document.getElementById(id)?.value||'';
+    const title = (gv('tf-title')||'').trim();
+    if(!title){ toast('请先填写任务标题,再起草指派留言','err'); return; }
+    const assigneeSel = document.getElementById('tf-assignee');
+    const assigneeName = assigneeSel ? (assigneeSel.options[assigneeSel.selectedIndex]?.text||'') : '';
+    const priSel = document.getElementById('tf-pri');
+    const priLabel = priSel ? (priSel.options[priSel.selectedIndex]?.text||'') : '';
+    sys='你是团队负责人,擅长写礼貌、清晰、含明确行动项与预期的任务指派消息。直接输出消息正文(中文,60-130字),不要前缀、不要署名、不要解释。';
+    prompt=`请为"把任务指派给同事"起草一段站内消息正文:简要说明任务、为什么交给他/她、希望何时反馈或推进,语气尊重、给到支持感。
+任务标题:${title}
+负责人:${assigneeName}
+优先级:${priLabel}
+${gv('tf-due')?'截止日期:'+gv('tf-due'):''}
+${(gv('tf-desc')||'').trim()?'任务说明:'+(gv('tf-desc')||'').trim().slice(0,150):''}`;
+  }else{
+    return;
+  }
+
+  const ta = document.getElementById(targetId);
+  if(!ta){ toast('未找到输入框','err'); return; }
+
+  const orig = btn ? btn.textContent : '';
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 起草中…'; }
+  const result = await callAI({system:sys, prompt, maxTokens:500, _action:'msg_draft', _actionLabel:'AI起草'+label, _cost:1});
+  if(btn){ btn.disabled=false; btn.textContent=orig||'✍️ AI 起草'; }
+  if(!result) return;   // callAI 失败已 toast
+  ta.value = String(result).trim();
+  ta.focus();
+  toast(`已为「${label}」生成草稿,可修改后再发送`,'ai');
+}
+
+// ───────────────────────── 2-3 个人周报自动生成 ─────────────────────────
+async function generateMyWeeklyReport(){
+  if(!currentUser){ toast('请先登录','err'); return; }
+  const wr = weekRange();   // 复用既有日期工具(本周 周一—周日)
+  const myId = currentUser.id;
+
+  // —— 聚合(前端纯本地,仅本人数据)——
+  const myFU = DB.followups
+    .filter(f=>f.createdBy===myId && f.createdAt>=wr.from && f.createdAt<=wr.to)
+    .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+
+  const myTasks = DB.tasks.filter(t=>isTaskParticipant(t));
+  const myTaskIds = new Set(myTasks.map(t=>t.id));
+
+  // 本人本周创建的进展(含状态变化),且任务属于本人参与
+  const inRange = ts => { const d=ts?String(ts).slice(0,10):''; return d>=wr.from && d<=wr.to; };
+  const myProg = DB.taskProgress
+    .filter(p=>p.createdBy===myId && inRange(p.createdAt) && myTaskIds.has(p.taskId))
+    .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+  const progByTask = {};
+  myProg.forEach(p=>{ (progByTask[p.taskId]=progByTask[p.taskId]||[]).push(p); });
+
+  const completedTasks = myTasks.filter(t=>t.completedAt && inRange(t.completedAt));
+  const upcoming = myTasks.filter(t=>t.dueDate && t.dueDate>=today() && t.status!=='done' && t.status!=='archived')
+    .sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).slice(0,8);
+
+  if(myFU.length===0 && myProg.length===0 && completedTasks.length===0){
+    toast('本周暂无可聚合的跟进或任务进展数据','err');
+    return;
+  }
+
+  // —— 组织结构化摘要(逐项截断兜底,避免 AI 输出被截)——
+  const cMap={}; DB.customers.forEach(c=>{cMap[c.id]=c;});
+  const lines=[];
+  lines.push(`【报告人】${currentUser.name||''}`);
+  lines.push(`【周期】${wr.from} ~ ${wr.to}(本周)`);
+  lines.push('');
+  lines.push(`一、本周客户跟进(共 ${myFU.length} 条,最多列 40 条)`);
+  if(myFU.length){
+    myFU.slice(0,40).forEach(f=>{
+      const co=cMap[f.customerId];
+      let l=`- ${String(f.createdAt).slice(0,10)} [${f.type||'跟进'}] ${co?.companyName||'未知客户'}:${String(f.content||'').slice(0,120)}`;
+      if(f.outcome) l+=` (成果:${f.outcome})`;
+      if(f.nextAction) l+=` 下一步:${String(f.nextAction).slice(0,60)}`;
+      lines.push(l);
+    });
+  }else{ lines.push('(本周无跟进记录)'); }
+  lines.push('');
+  lines.push(`二、本周任务进展(本人参与的任务,共 ${Object.keys(progByTask).length} 个有进展,最多列 30 个)`);
+  if(Object.keys(progByTask).length){
+    Object.keys(progByTask).slice(0,30).forEach(tid=>{
+      const t=myTasks.find(x=>x.id===tid);
+      lines.push(`- 任务「${t?.title||'(未知任务)'}」(${t?(t.progress||0):0}% · ${t?(TSK_STATUS[normTaskStatus(t.status)]?.label||t.status):''})`);
+      progByTask[tid].slice(0,4).forEach(p=>{
+        let l=`  · ${String(p.createdAt).slice(0,10)}:${String(p.content||'').slice(0,120)}`;
+        if(p.statusChange) l+=` [状态变化:${p.statusChange}]`;
+        lines.push(l);
+      });
+    });
+  }else{ lines.push('(本周无任务进展记录)'); }
+  lines.push('');
+  lines.push(`三、本周完成的任务(共 ${completedTasks.length} 个)`);
+  completedTasks.slice(0,20).forEach(t=>lines.push(`- ${t.title}(${t.category||'其他'})`));
+  if(!completedTasks.length) lines.push('(本周无完成任务)');
+  lines.push('');
+  lines.push(`四、下周到期/在办任务(最多 8 个)`);
+  upcoming.forEach(t=>lines.push(`- ${t.dueDate} 截止:${t.title}`));
+  if(!upcoming.length) lines.push('(无)');
+
+  let summary = lines.join('\n');
+  // 最坏情况兜底:整体硬截断,避免输入过长
+  const MAX_INPUT = 12000;
+  if(summary.length>MAX_INPUT) summary = summary.slice(0,MAX_INPUT)+'\n…(数据较多,已截断,余略)';
+
+  // —— 流式生成(沿用既有周报流式管线 + 高 maxTokens 防截断)——
+  repState.loading=true; repState.report=''; repState.done=false; repState.streaming=false;
+  repState.isEditing=false; repState.isLocalDone=false; repState.aiRefining=false;
+  repState.source='ai';
+  refreshReport();
+
+  const sys='你是企业员工的个人周报助手。请根据用户本周真实工作数据,生成一份**第一人称("我")**、条理清晰、实事求是的中文个人周报,使用 markdown 格式,不要编造数据中没有的内容。';
+  const prompt=`请把下面我本周的工作数据整理成"我的本周周报",markdown 格式,包含以下部分:
+# 我的本周周报(${wr.from} ~ ${wr.to})
+## 一、本周工作概述(2-3 句总览)
+## 二、客户跟进情况(提炼重点客户与进展,不逐条罗列)
+## 三、任务进展与完成情况
+## 四、问题与风险(如有)
+## 五、下周计划
+语言简洁专业,突出成果与下一步。以下是我的本周数据:
+
+${summary}`;
+
+  const result = await callAI({
+    system:sys, prompt,
+    maxTokens:8000, _action:'my_weekly_report', _actionLabel:'一键生成我的周报', _cost:3,
+    stream:true,
+    onChunk:(chunk,full)=>{
+      repState.report=full;
+      let o=document.getElementById('rep-out');
+      if(!o){ repState.done=true; repState.streaming=true; repState.loading=false; refreshReport(); o=document.getElementById('rep-out'); }
+      if(o){ o.innerHTML=mdRender(full)+'<span class="stream-cur"></span>'; o.scrollTop=o.scrollHeight; }
+    }
+  });
+
+  repState.streaming=false; repState.loading=false;
+  repState.done = !!(repState.report && repState.report.trim());
+  const o=document.getElementById('rep-out'); if(o && repState.report) o.innerHTML=mdRender(repState.report);
+  refreshReport();
+  if(result) toast('🤖 我的周报已生成,可编辑后保存/导出','ai');
 }
 
 
