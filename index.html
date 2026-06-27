@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.13 (PWA)</title>
+<title>花花食界AI助理 · v33.0.14 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,24 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.14(2026-06-27):任务附件 + AI 分析整理(多模态) — 纯前端,零 SQL,附件不持久化
+    · 描述区「📎 添加」:任务新建/编辑表单可选本地图片 + 文档(.docx/.xlsx/.txt)。
+      图片客户端压缩(canvas 缩放最长边 ~1280px → JPEG base64),单次最多 3 张;
+      文档复用 _aiImportExtractDocx/_aiImportExtractXlsx 解析引擎抽纯文本,.txt 用 File.text();
+      PDF 给提示不支持。附件存表单级临时变量 _taskAttach(芯片列出可移除),
+      不上 Storage、不写 DB、不存 sessionStorage,表单打开/保存即清空。
+    · 「AI 拆解为子项」→「AI 分析整理」(函数名 aiBreakdownTask 保留,命令栏路由不变):
+      把 描述 + 文档文本 + 图片 一起喂 callAI,整理为结构化说明(背景/目标/关键步骤/注意事项),
+      结果进既有预览浮层 _openAiOverlay,人在环中,「填入描述/追加」确认后才落入 tf-desc,不自动存任务。
+    · callAI 增加可选 images 参数并贯穿三家分发(不传时所有既有文本调用零影响):
+      Claude(content=[text,image/source])、Gemini(parts 追加 inline_data)、
+      OpenAI 兼容(user.content 用 image_url data URI)。
+    · 视觉门控:AI 设置加「支持视觉」开关 —— 本地模型存 cfg.models[id].vision,
+      共享配置存 ai_shared_config.vision 列(migration_v33.0.14_shared_vision.sql)。
+      _effectiveVisionOK():Claude/Gemini 原生 true,其余以该模型的 vision 开关/列为准。
+      分析整理前若含图片但当前模型不支持视觉,toast 提示并降级为「文字+文档」,
+      绝不把图片发给 DeepSeek 等纯文本模型。
   ══════════════════════════════════════════════════════════════════
   v33.0.13(2026-06-27):任务体系升级 — 任务类型 + 责任人改名 + 执行人 + 指派强制发消息
     · 任务类型(task_type):新增 TSK_TYPE=['全员跟进','一次性','日常运营','其他'],
@@ -1753,7 +1771,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.13 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.14 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -5062,6 +5080,7 @@ function _filterExecList(q){
 
 function openTaskForm(id){
   editingTaskId=id;
+  _taskAttachReset();   // v33.0.14:每次打开表单清空临时附件
   const t=id?DB.tasks.find(x=>x.id===id):null;
   if(t && !canEditTask(t)){toast('无权编辑此任务','err');return;}
 
@@ -5105,12 +5124,16 @@ function openTaskForm(id){
     <div class="fg full"><label>任务标题<span class="req">*</span></label>
       <input id="tf-title" value="${v('title')}" placeholder="如:Q2 销售目标 300 万跟进"><span class="err-m" id="e-tf-title"></span></div>
     <div class="fg full">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <label>任务描述</label>
-        <button type="button" class="btn btn-ai btn-sm" id="ai-breakdown-btn" onclick="aiBreakdownTask()" style="padding:4px 10px;font-size:11px">🔍 AI 拆解为子项</button>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn btn-sm" onclick="_taskAttachPick()" style="padding:4px 10px;font-size:11px" title="添加本地图片/文档(.docx/.xlsx/.txt),仅用于 AI 分析整理,不会保存">📎 添加</button>
+          <button type="button" class="btn btn-ai btn-sm" id="ai-breakdown-btn" onclick="aiBreakdownTask()" style="padding:4px 10px;font-size:11px">🔍 AI 分析整理</button>
+        </div>
       </div>
+      <input type="file" id="tf-attach-input" multiple accept="image/*,.docx,.xlsx,.txt" style="display:none" onchange="_taskAttachAddFiles(this)">
+      <div id="tf-attach-chips" style="display:none;flex-wrap:wrap;gap:6px;margin:6px 0"></div>
       <textarea id="tf-desc" placeholder="详细说明任务背景、目标、关键交付物...">${v('description')}</textarea>
-      <div id="ai-breakdown-result" style="display:none;margin-top:6px;padding:8px 10px;background:#f5f3ff;border-radius:7px;border:1px solid #e9d5ff;font-size:11px;color:var(--sl);line-height:1.7"></div>
     </div>
     <div class="fg"><label>分类</label>
       <select id="tf-cat">${sel('category','其他',TSK_CATEGORY)}</select></div>
@@ -5255,6 +5278,7 @@ async function saveTask(){
   await saveTaskToDB(obj, existing, assignMsg);
   if(btn){btn.disabled=false;btn.textContent=editingTaskId?'保存修改':'创建任务';}
   closeModal();
+  _taskAttachReset();   // v33.0.14:保存后清空临时附件
   toast(editingTaskId?`"${obj.title}" 已更新`:`"${obj.title}" 创建成功`);
 }
 
@@ -5932,69 +5956,155 @@ async function saveProgress(){
 // ── AI 功能(沿用 v27 callAI 统一入口)
 // ══════════════════════════════════════════════════════════
 
-// 1. AI 拆解任务:把宏观任务拆成 3-7 个可执行子项,追加到 description
+// ── v33.0.14:任务附件(仅用于喂 AI 分析整理,零持久化:不上 Storage、不写 DB、不存 sessionStorage)──
+// 元素:图片 {kind:'image', name, mediaType, data(纯base64)} / 文档 {kind:'doc', name, text}
+let _taskAttach = [];
+const _TASK_ATTACH_MAX_IMG = 3;
+
+function _taskAttachReset(){ _taskAttach = []; }
+
+function _taskAttachPick(){ document.getElementById('tf-attach-input')?.click(); }
+
+async function _taskAttachAddFiles(input){
+  const files = Array.from(input.files||[]);
+  input.value = '';   // 允许重复选同一文件
+  for(const f of files){
+    const nameLower = (f.name||'').toLowerCase();
+    try{
+      if((f.type||'').startsWith('image/')){
+        const imgCount = _taskAttach.filter(a=>a.kind==='image').length;
+        if(imgCount >= _TASK_ATTACH_MAX_IMG){ toast(`图片最多 ${_TASK_ATTACH_MAX_IMG} 张,已忽略「${f.name}」`,'err'); continue; }
+        const {mediaType, data} = await _compressImageToBase64(f);
+        _taskAttach.push({kind:'image', name:f.name||'图片', mediaType, data});
+      }else if(nameLower.endsWith('.pdf')){
+        toast('暂不支持 PDF,请转为图片或文本','err'); continue;
+      }else if(nameLower.endsWith('.docx')){
+        const text = await _aiImportExtractDocx(f);
+        _taskAttach.push({kind:'doc', name:f.name, text});
+      }else if(nameLower.endsWith('.xlsx')){
+        const text = await _aiImportExtractXlsx(f);
+        _taskAttach.push({kind:'doc', name:f.name, text});
+      }else if(nameLower.endsWith('.txt')){
+        const text = await f.text();
+        _taskAttach.push({kind:'doc', name:f.name, text});
+      }else{
+        toast(`不支持的文件类型:${f.name}(仅图片 / .docx / .xlsx / .txt)`,'err'); continue;
+      }
+    }catch(e){
+      toast(`「${f.name}」解析失败:${e.message||e}`,'err');
+    }
+  }
+  _renderTaskAttachChips();
+}
+
+function _taskAttachRemove(idx){ _taskAttach.splice(idx,1); _renderTaskAttachChips(); }
+
+function _renderTaskAttachChips(){
+  const box = document.getElementById('tf-attach-chips');
+  if(!box) return;
+  if(!_taskAttach.length){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='flex';
+  box.innerHTML = _taskAttach.map((a,i)=>{
+    const ico = a.kind==='image' ? '🖼️' : '📄';
+    const meta = a.kind==='image' ? '' : ` · ${(a.text||'').length}字`;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid var(--sv);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--sl)">
+      ${ico} ${h(a.name)}${meta}
+      <span onclick="_taskAttachRemove(${i})" title="移除" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span>
+    </span>`;
+  }).join('');
+}
+
+// 客户端压缩图片:缩放到最长边 ~1280px,转 JPEG base64(控制 payload 与视觉 token)
+function _compressImageToBase64(file, maxEdge=1280){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, ht = img.height;
+        const scale = Math.min(1, maxEdge/Math.max(w,ht));
+        w = Math.round(w*scale); ht = Math.round(ht*scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = ht;
+        canvas.getContext('2d').drawImage(img,0,0,w,ht);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve({mediaType:'image/jpeg', data:(dataUrl.split(',')[1]||'')});
+      };
+      img.onerror = ()=>reject(new Error('图片加载失败'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=>reject(new Error('读取失败'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// 1. AI 分析整理:依据 描述 + 文档附件 + 图片,整理为结构化任务说明(人在环中,预览后填入描述)
 async function aiBreakdownTask(){
   const title = document.getElementById('tf-title')?.value.trim()||'';
   const desc  = document.getElementById('tf-desc')?.value.trim()||'';
   if(title.length<3){toast('请先填写任务标题(至少3个字)','err');return;}
 
-  const btn = document.getElementById('ai-breakdown-btn');
-  const box = document.getElementById('ai-breakdown-result');
-  if(btn){btn.disabled=true;btn.textContent='⏳ 拆解中...';}
-  if(box){
-    box.style.display='block';
-    box.innerHTML='<span style="color:var(--ms)">🤖 AI 正在思考如何拆解...</span>';
+  // 收集附件:文档文本 + 图片(base64)
+  const docs = _taskAttach.filter(a=>a.kind==='doc');
+  let images = _taskAttach.filter(a=>a.kind==='image').map(a=>({mediaType:a.mediaType, data:a.data}));
+
+  // 视觉门控:图片遇纯文本模型 → 提示并降级为「文字+文档」,绝不把图片发给 DeepSeek 等
+  if(images.length && !_effectiveVisionOK()){
+    toast('当前模型不支持图片,本次仅按文字+文档整理(如需识图请在 AI 设置切换到视觉模型:豆包视觉/千问 Qwen-VL/Claude/Gemini)','err');
+    images = [];
   }
+
+  const btn = document.getElementById('ai-breakdown-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ 整理中...';}
+
+  const docText = docs.length
+    ? docs.map(d=>`【附件文档:${d.name}】\n${(d.text||'').slice(0,6000)}`).join('\n\n')
+    : '';
 
   const result = await callAI({
-    system:'你是经验丰富的项目经理,擅长把宏观目标拆解为具体可执行的工作子项。回复使用简洁中文,直接输出子项列表,无废话。',
-    prompt:`请把下面这个任务拆解为 3-7 个具体可执行的子项(每项都是可在 1-3 天内完成的具体行动)。
+    system:'你是经验丰富的项目经理与资料整理专家。请把用户提供的任务标题、描述、附件文档与图片信息,整理成结构清晰、可执行的任务说明。用简洁中文 markdown 输出,不要寒暄、不要编造未提供的具体数字或事实。',
+    prompt:`请依据以下全部信息,整理出一份结构化的任务说明(markdown),包含这几节:
+## 背景
+## 目标
+## 关键步骤(用 "□ " 待办项逐条列出,按执行顺序)
+## 注意事项 / 风险
+信息不足的部分可标注"待补充",不要臆造。
 
 任务标题:${title}
-${desc?'当前描述:'+desc:'(暂无描述)'}
+${desc?'当前描述:\n'+desc:'(暂无描述)'}
+${docText?'\n附件文档内容:\n'+docText:''}
+${images.length?'\n(另附 '+images.length+' 张图片,请结合图片内容一并整理)':''}`,
+    maxTokens:2000,
+    images: images.length?images:undefined,
+    _action:'task_analyze', _actionLabel:'任务分析整理', _cost:1});
 
-要求:
-1. 每个子项以 "□ " 开头(后续可在描述中改为 "✓ " 标记完成)
-2. 每项不超过 30 字,具体到"做什么"
-3. 按执行顺序排列(从准备到收尾)
-4. 不要输出标题、解释、寒暄,直接列出子项
+  if(btn){btn.disabled=false;btn.textContent='🔍 AI 分析整理';}
+  if(!result) return;   // callAI 失败已 toast
 
-示例格式:
-□ 收集xxx的3家潜在供应商资料
-□ 与采购部对齐预算上限
-□ ...`,
-    maxTokens:600
-  , _action:'task_breakdown', _actionLabel:'任务拆解', _cost:1});
-
-  if(btn){btn.disabled=false;btn.textContent='🔍 AI 拆解为子项';}
-  if(!result){
-    if(box){box.style.display='none';}
-    return;
-  }
-
-  // 显示结果 + 提供"插入到描述"按钮
-  if(box){
-    box.innerHTML = `
-      <div style="font-weight:700;color:#6d28d9;margin-bottom:6px">🤖 AI 拆解结果:</div>
-      <div style="white-space:pre-wrap;color:var(--ink);background:#fff;padding:8px;border-radius:6px;border:1px solid #e9d5ff;font-size:12px;margin-bottom:8px">${h(result)}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-p btn-sm" onclick="applyAIBreakdown()">↓ 插入到描述</button>
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('ai-breakdown-result').style.display='none'">✕ 关闭</button>
+  // 人在环中:结果进预览浮层,确认后才填入 tf-desc(不自动保存任务)
+  _taskAnalyzeResult = result;
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">🔍 AI 分析整理结果</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body">
+      <div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:7px;padding:9px 12px;font-size:12px;color:#5b21b6;line-height:1.7;margin-bottom:12px">
+        以下为 AI 依据 描述${docs.length?' + 文档':''}${images.length?' + 图片':''} 整理的结果,仅供参考。可「填入描述」覆盖或「追加到描述」,确认保存任务后才生效;附件不会被保存。
       </div>
-      <input type="hidden" id="ai-breakdown-content" value="${h(result)}">`;
-  }
+      <div style="background:#fff;border:1px solid var(--sv);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;max-height:50vh;overflow:auto">${mdRender(result)}</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="_aiCopyText(_taskAnalyzeResult)">📋 复制</button>
+      <button class="btn" onclick="_applyTaskAnalyze(true)">↧ 追加到描述</button>
+      <button class="btn btn-p" onclick="_applyTaskAnalyze(false)">↓ 填入描述(覆盖)</button>
+    </div>`, 680);
 }
-function applyAIBreakdown(){
-  const content = document.getElementById('ai-breakdown-content')?.value || '';
+let _taskAnalyzeResult = '';
+function _applyTaskAnalyze(append){
   const desc = document.getElementById('tf-desc');
-  if(!desc) return;
-  // 追加到现有描述后,加分隔
+  if(!desc){ toast('任务表单已关闭,无法填入','err'); _closeAiOverlay(); return; }
   const cur = desc.value.trim();
-  desc.value = cur ? `${cur}\n\n--- AI 拆解 ---\n${content}` : content;
-  toast('已插入到任务描述');
-  // 隐藏结果
-  const box = document.getElementById('ai-breakdown-result');
-  if(box) box.style.display='none';
+  desc.value = (append && cur) ? (cur + '\n\n--- AI 分析整理 ---\n' + _taskAnalyzeResult) : _taskAnalyzeResult;
+  toast(append?'已追加到任务描述':'已填入任务描述');
+  _closeAiOverlay();
 }
 
 // 2. AI 总结进展:把任务的所有 progress 让 AI 输出 200 字总结
@@ -10084,6 +10194,18 @@ function getEffectiveAIConfig(){
   };
 }
 
+// v33.0.14:当前激活模型是否支持视觉(识图)
+// Claude/Gemini 原生支持(永远 true);其余以该模型的 vision 开关为准:
+// 共享配置 → ai_shared_config.vision 列;本地配置 → cfg.models[id].vision。
+function _effectiveVisionOK(){
+  const eff = getEffectiveAIConfig();
+  const ty = (eff.type||'').toLowerCase();
+  if(ty==='claude'||ty==='anthropic'||ty==='gemini'||ty==='google') return true;
+  if(eff.source==='shared') return !!_sharedAICfg?.vision;
+  const cfg = loadAIConfig();
+  return !!(cfg.models?.[eff.modelId]?.vision);
+}
+
 // 获取实际使用的高德 Key(共享优先,本地降级)
 function getEffectiveAmapKey(){
   if(isSharedAIActive() && _sharedAICfg.amapKey) return _sharedAICfg.amapKey;
@@ -10202,6 +10324,7 @@ function getAllModels(){
 //   3. 调用后写日志(success 或 fail)
 // 调用方可传 _action 和 _cost 参数标记本次调用的业务类型和成本权重
 async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
+                       images=null,
                        _action='generic', _actionLabel='', _cost=1}){
   // 1. 解析有效配置(共享优先 / 本地降级)
   const eff = getEffectiveAIConfig();
@@ -10232,13 +10355,13 @@ async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
     const mtype = eff.type;
     const modelCfg = {key: eff.key, model: eff.model, endpoint: eff.endpoint};
     if(mtype==='claude' || mtype==='anthropic'){
-      result = await _callClaude(system,prompt,maxTokens,modelCfg,stream,onChunk);
+      result = await _callClaude(system,prompt,maxTokens,modelCfg,stream,onChunk,images);
     }else if(mtype==='gemini' || mtype==='google'){
-      result = await _callGemini(system,prompt,maxTokens,modelCfg);
+      result = await _callGemini(system,prompt,maxTokens,modelCfg,images);
     }else{
       // openai_compat:DeepSeek、豆包、千问及所有自定义模型
       if(!eff.endpoint){ toast('该模型未配置 API 端点','err'); return null; }
-      result = await _callOpenAICompat(eff.endpoint,system,prompt,maxTokens,modelCfg,stream,onChunk);
+      result = await _callOpenAICompat(eff.endpoint,system,prompt,maxTokens,modelCfg,stream,onChunk,images);
     }
     ok = !!result;
   }catch(e){
@@ -10262,9 +10385,13 @@ async function callAI({system,prompt,maxTokens=800,stream=false,onChunk=null,
   return result;
 }
 
-async function _callClaude(system,prompt,maxTokens,cfg,stream,onChunk){
+async function _callClaude(system,prompt,maxTokens,cfg,stream,onChunk,images){
+  // v33.0.14:多模态 — 有图片时 content 由字符串改为 [text, ...image]
+  const content = (images&&images.length)
+    ? [{type:'text',text:prompt}, ...images.map(im=>({type:'image',source:{type:'base64',media_type:im.mediaType,data:im.data}}))]
+    : prompt;
   const body={model:cfg.model||'claude-sonnet-4-5',max_tokens:maxTokens,stream:!!stream,
-    messages:[{role:'user',content:prompt}]};
+    messages:[{role:'user',content}]};
   if(system)body.system=system;
   const res=await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -10288,20 +10415,28 @@ async function _callClaude(system,prompt,maxTokens,cfg,stream,onChunk){
   return data.content?.[0]?.text?.trim()||null;
 }
 
-async function _callGemini(system,prompt,maxTokens,cfg){
+async function _callGemini(system,prompt,maxTokens,cfg,images){
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model||'gemini-2.0-flash'}:generateContent?key=${cfg.key}`;
   const text=(system?system+'\n\n':'')+prompt;
+  // v33.0.14:多模态 — 有图片时 parts 追加 inline_data
+  const parts=(images&&images.length)
+    ? [{text}, ...images.map(im=>({inline_data:{mime_type:im.mediaType, data:im.data}}))]
+    : [{text}];
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{role:'user',parts:[{text}]}],generationConfig:{maxOutputTokens:maxTokens}})});
+    body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:maxTokens}})});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||'HTTP '+res.status);}
   const data=await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||null;
 }
 
-async function _callOpenAICompat(endpoint,system,prompt,maxTokens,cfg,stream,onChunk){
+async function _callOpenAICompat(endpoint,system,prompt,maxTokens,cfg,stream,onChunk,images){
   const messages=[];
   if(system)messages.push({role:'system',content:system});
-  messages.push({role:'user',content:prompt});
+  // v33.0.14:多模态 — 有图片时 user.content 用 image_url data URI 数组
+  const userContent=(images&&images.length)
+    ? [{type:'text',text:prompt}, ...images.map(im=>({type:'image_url', image_url:{url:`data:${im.mediaType};base64,${im.data}`}}))]
+    : prompt;
+  messages.push({role:'user',content:userContent});
   const res=await fetch(endpoint,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
@@ -10571,6 +10706,14 @@ function renderAISettings(){
         <button class="btn" onclick="testAIConnection('${activeModel}')" style="margin-top:20px">🔌 测试连接</button>
         <div id="ai-test-${activeModel}" class="ai-test-result" style="display:none"></div>
       </div>
+      <div class="fg full">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+          <input type="checkbox" id="ai-vision-${activeModel}" style="margin-top:2px"
+            ${((()=>{const ty=(meta.type||'').toLowerCase();const def=(ty==='claude'||ty==='anthropic'||ty==='gemini'||ty==='google');return (mcfg.vision!==undefined?mcfg.vision:def);})())?'checked':''}
+            onchange="saveAIModelConfig('${activeModel}')">
+          <span style="font-size:12px;color:var(--sl);line-height:1.6">支持视觉(可识别图片)— 勾选后「AI 分析整理」可把图片发给该模型。Claude / Gemini 原生支持;豆包视觉版 / 千问 Qwen-VL 等请手动勾选;DeepSeek 等纯文本模型请保持关闭(否则发图会报错)。</span>
+        </label>
+      </div>
     </div>
     <div style="margin-top:12px;padding:10px;background:#f5f3ff;border-radius:8px;font-size:12px;color:#5b21b6;line-height:1.8">
       💡 <strong>如何获取 ${meta.name} API Key：</strong><br>
@@ -10742,6 +10885,14 @@ function renderSharedAIConfigSection(){
         <div style="font-size:10px;color:var(--ms);margin-top:3px">批量导入算几次,推荐 10</div>
       </div>
 
+      <div class="fg full">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+          <input type="checkbox" id="shared-vision" style="margin-top:2px"
+            ${((s.vision!==undefined?s.vision:(s.protocol==='anthropic'||s.protocol==='google')))?'checked':''}>
+          <span style="font-size:12px;color:var(--sl);line-height:1.6">支持视觉(可识别图片)— 勾选后「AI 分析整理」可把图片发给共享模型。Claude / Gemini 原生支持;豆包视觉版 / 千问 Qwen-VL 等请手动勾选;DeepSeek 等纯文本模型请保持关闭(否则发图会报错)。</span>
+        </label>
+      </div>
+
       <div class="fg full" style="background:#fef3c7;border-radius:7px;padding:8px 10px;font-size:11px;color:#92400e;line-height:1.6">
         ⚠ <strong>注意:</strong>API Key 会被员工的浏览器加载(为了直连 AI 服务)。即便保密,员工仍可通过浏览器开发者工具查看。建议:
         ① 使用单独的"团队共享 Key"(便于在出问题时单独作废而不影响您个人 Key)
@@ -10827,8 +10978,9 @@ async function saveSharedAIFromForm(btn){
   const apiKey     = document.getElementById('shared-api-key')?.value.trim()||'';
   const dailyLimit = parseInt(document.getElementById('shared-daily-limit')?.value||'50',10);
   const bulkCost   = parseInt(document.getElementById('shared-bulk-cost')?.value||'10',10);
+  const vision     = !!document.getElementById('shared-vision')?.checked;  // v33.0.14:视觉开关
 
-  console.log('[saveSharedAIFromForm] 表单数据:', {modelId, modelName, protocol, endpoint, apiKeyLen: apiKey.length, dailyLimit, bulkCost});
+  console.log('[saveSharedAIFromForm] 表单数据:', {modelId, modelName, protocol, endpoint, apiKeyLen: apiKey.length, dailyLimit, bulkCost, vision});
 
   if(!apiKey){toast('API Key 不可为空','err');return;}
   if(!endpoint && protocol!=='google'){toast('请填写 API 端点 URL','err');return;}
@@ -10844,6 +10996,7 @@ async function saveSharedAIFromForm(btn){
     modelId, modelName, protocol, endpoint, apiKey,
     dailyLimitPerUser: dailyLimit,
     bulkActionCost: bulkCost,
+    vision,
   });
 
   if(btn){btn.disabled=false; btn.textContent=originalText;}
@@ -10918,8 +11071,10 @@ function saveAIModelConfig(modelId){
   if(!cfg.models[modelId])cfg.models[modelId]={key:'',model:''};
   const keyEl=document.getElementById(`ai-key-${modelId}`);
   const modelEl=document.getElementById(`ai-model-${modelId}`);
+  const visionEl=document.getElementById(`ai-vision-${modelId}`);
   if(keyEl)cfg.models[modelId].key=keyEl.value.trim();
   if(modelEl)cfg.models[modelId].model=modelEl.value;
+  if(visionEl)cfg.models[modelId].vision=visionEl.checked;  // v33.0.14:视觉开关
   saveAIConfig(cfg);
   // 向后兼容旧 claude key
   if(modelId==='claude'&&cfg.models.claude?.key){
@@ -14216,7 +14371,7 @@ async function _cmdClassify(q){
     'assess_health=评估某客户健康度(需customerName)',
     'remind_task=催办某任务进度(需taskTitle)',
     'meeting_task=给某任务发起会议邀请(需taskTitle)',
-    'breakdown_task=拆解某任务为子项(需taskTitle)',
+    'breakdown_task=分析整理某任务(打开编辑表单内的「AI 分析整理」,需taskTitle)',
     'suggest_next=某任务下一步行动建议(需taskTitle)',
     'today_plan=今日规划',
     'cooling_list=查看降温客户清单',
@@ -14325,7 +14480,7 @@ function _cmdRunCustomerAction(action, custId){
 function _cmdRunTaskAction(action, taskId){
   if(action==='remind_task') openTaskDetail(taskId);   // 命令栏不直接发催办,改为打开任务详情由用户点「⏰ 催进度」(避免无确认对外发消息)
   else if(action==='meeting_task') openMeetingForm(taskId);
-  else if(action==='breakdown_task') openTaskForm(taskId);   // 编辑表单内含「🔍 AI 拆解」
+  else if(action==='breakdown_task') openTaskForm(taskId);   // 编辑表单内含「🔍 AI 分析整理」
   else if(action==='suggest_next') aiSuggestNextAction(taskId);
 }
 
