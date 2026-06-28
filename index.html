@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.16 (PWA)</title>
+<title>花花食界AI助理 · v33.0.17 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,19 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.17(2026-06-28):视觉测试连接 + 跟进/客户图片识别 + 确认框文案修复(纯前端,零 SQL)
+    · 视觉模型「🔌 测试连接」(testVisionConn):用 AI 设置共享配置里当前填写的四项(不依赖已存值)
+      + 一张内置 1×1 测试图发最小视觉请求;成功 toast「✅ 连接成功」,失败显示原始错误(model
+      does not exist / 无权限 / 端点错误 等)便于管理员定位。
+    · 跟进内容 / 客户备注 加「📎 添加 + 🔍 AI 识别整理」:抽象为通用组件(_ctxAttach / _attachAIBox /
+      _ctxAttachAnalyze),两上下文各自独立临时附件数组,表单打开/保存即清空(_ctxAttachReset)。
+      图片客户端压缩后 base64、限 3 张;文档复用 _aiImportExtractDocx/Xlsx;PDF 提示不支持。
+      走 callAI(images) → v33.0.16 视觉路由;未配视觉模型降级纯文字;结果进 _openAiOverlay 预览,
+      「填入/追加」到 content/notes,人在环中不自动保存;附件零持久化(不入库、不存 sessionStorage)。
+    · 修复 openConfirm 按钮文案错位:加可选 (okText, okType) 参数(不传则原行为零回归,所有现有删除
+      确认不变);修正 去改密码/批量归档/批量还原/移出部门/拨打电话 5 处误显示「确认删除」的按钮
+      (重置密码确认本就是独立 modal,文案已正确)。
   ══════════════════════════════════════════════════════════════════
   v33.0.16(2026-06-27):双模型分工 — DeepSeek 主力跑所有文字 + 视觉副模型仅识图时征用
     · 🔴 回归底线:callAI 不带图片(images 空)时逐字节走主模型 DeepSeek,既有文字功能零影响。
@@ -1847,7 +1860,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.16 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.17 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -3488,7 +3501,7 @@ async function doLogin(){
 
     // v33.0.7:密码曾被管理员重置 → 提醒尽快修改(不强制)
     if(currentUser?.mustChangePwd){
-      setTimeout(()=>openConfirm('您的登录密码已被管理员重置为临时密码,为安全起见建议立即修改。现在去修改吗?', ()=>openChangePasswordModal()), 1300);
+      setTimeout(()=>openConfirm('您的登录密码已被管理员重置为临时密码,为安全起见建议立即修改。现在去修改吗?', ()=>openChangePasswordModal(), '去修改', 'primary'), 1300);
     }
 
   }catch(e){
@@ -4644,7 +4657,7 @@ function bulkArchiveAction(){
     clearTaskSelection();
     toast(`批量归档完成:成功 ${ok} 个${skip?`,跳过 ${skip} 个非完成`:''}${fail?`,失败 ${fail} 个`:''}`);
     await loadTasks();
-  });
+  }, '确认归档', 'primary');
 }
 
 // ── 批量操作:还原 ────────────────────────────────────────
@@ -4680,7 +4693,7 @@ function bulkUnarchive(){
     toast(`批量还原完成:成功 ${ok} 个${fail?`,失败 ${fail} 个`:''}`);
     await loadTasks();
     await loadTaskProgress();
-  });
+  }, '确认还原', 'primary');
 }
 
 // ── 批量操作:删除 ────────────────────────────────────────
@@ -6198,6 +6211,131 @@ function _applyTaskAnalyze(append){
   _closeAiOverlay();
 }
 
+// ══════════════════════════════════════════════════════════
+// v33.0.17:通用「📎 添加 + AI 识别整理」组件(跟进内容 / 客户备注复用,零持久化)
+// 复用 _compressImageToBase64 / _aiImportExtractDocx|Xlsx / callAI(视觉路由)/ _openAiOverlay。
+// 每个上下文独立临时附件数组;表单打开/关闭/保存调 _ctxAttachReset(ctx) 清空。
+// ══════════════════════════════════════════════════════════
+let _ctxAttach = { fu:[], cust:[] };
+const _CTX_ATTACH_MAX_IMG = 3;
+const _CTX_CFG = {
+  fu: {
+    targetId:'ff-co', label:'跟进内容',
+    system:'你是资深客户经理助理。把用户提供的图片/文档/已填文字,整理成一条简洁清晰的客户跟进记录(沟通要点 / 客户反馈 / 下一步)。用简洁中文,分点呈现,不寒暄、不编造未提供的事实。',
+    promptHead:'请把以下信息整理成一条客户跟进记录(沟通要点 / 客户反馈 / 下一步):',
+    overlayTitle:'🔍 AI 识别整理 — 跟进内容',
+  },
+  cust: {
+    targetId:'cf-no', label:'客户备注',
+    system:'你是客户资料整理助手。把用户提供的图片/文档/已填文字,整理成简洁的客户备注要点。用简洁中文,只保留关键信息,不寒暄、不编造未提供的事实。',
+    promptHead:'请把以下信息整理成简洁的客户备注要点:',
+    overlayTitle:'🔍 AI 识别整理 — 客户备注',
+  },
+};
+function _ctxAttachReset(ctx){ if(_ctxAttach[ctx]) _ctxAttach[ctx]=[]; }
+function _ctxAttachPick(ctx){ document.getElementById('ctx-attach-input-'+ctx)?.click(); }
+async function _ctxAttachAddFiles(ctx, input){
+  const arr = _ctxAttach[ctx] || (_ctxAttach[ctx]=[]);
+  const files = Array.from(input.files||[]);
+  input.value = '';
+  for(const f of files){
+    const nameLower=(f.name||'').toLowerCase();
+    try{
+      if((f.type||'').startsWith('image/')){
+        if(arr.filter(a=>a.kind==='image').length >= _CTX_ATTACH_MAX_IMG){ toast(`图片最多 ${_CTX_ATTACH_MAX_IMG} 张,已忽略「${f.name}」`,'err'); continue; }
+        const {mediaType, data} = await _compressImageToBase64(f);
+        arr.push({kind:'image', name:f.name||'图片', mediaType, data});
+      }else if(nameLower.endsWith('.pdf')){
+        toast('暂不支持 PDF,请转为图片或文本','err'); continue;
+      }else if(nameLower.endsWith('.docx')){
+        arr.push({kind:'doc', name:f.name, text:await _aiImportExtractDocx(f)});
+      }else if(nameLower.endsWith('.xlsx')){
+        arr.push({kind:'doc', name:f.name, text:await _aiImportExtractXlsx(f)});
+      }else if(nameLower.endsWith('.txt')){
+        arr.push({kind:'doc', name:f.name, text:await f.text()});
+      }else{
+        toast(`不支持的文件类型:${f.name}(仅图片 / .docx / .xlsx / .txt)`,'err'); continue;
+      }
+    }catch(e){ toast(`「${f.name}」解析失败:${e.message||e}`,'err'); }
+  }
+  _renderCtxAttachChips(ctx);
+}
+function _ctxAttachRemove(ctx, idx){ (_ctxAttach[ctx]||[]).splice(idx,1); _renderCtxAttachChips(ctx); }
+function _renderCtxAttachChips(ctx){
+  const box = document.getElementById('ctx-attach-chips-'+ctx);
+  if(!box) return;
+  const arr = _ctxAttach[ctx]||[];
+  if(!arr.length){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='flex';
+  box.innerHTML = arr.map((a,i)=>{
+    const ico = a.kind==='image' ? '🖼️' : '📄';
+    const meta = a.kind==='image' ? '' : ` · ${(a.text||'').length}字`;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid var(--sv);border-radius:14px;padding:3px 10px;font-size:11px;color:var(--sl)">
+      ${ico} ${h(a.name)}${meta}
+      <span onclick="_ctxAttachRemove('${ctx}',${i})" title="移除" style="cursor:pointer;color:#ef4444;font-weight:700">✕</span>
+    </span>`;
+  }).join('');
+}
+// 返回「📎 添加 + 🔍 AI 识别整理」按钮行 + 隐藏 input + 芯片容器的 HTML
+function _attachAIBox(ctx){
+  return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" class="btn btn-sm" onclick="_ctxAttachPick('${ctx}')" title="添加本地图片/文档(.docx/.xlsx/.txt),仅用于 AI 识别整理,不会保存">📎 添加</button>
+      <button type="button" class="btn btn-ai btn-sm" id="ctx-ai-btn-${ctx}" onclick="_ctxAttachAnalyze('${ctx}')">🔍 AI 识别整理</button>
+    </div>
+    <input type="file" id="ctx-attach-input-${ctx}" multiple accept="image/*,.docx,.xlsx,.txt" style="display:none" onchange="_ctxAttachAddFiles('${ctx}',this)">
+    <div id="ctx-attach-chips-${ctx}" style="display:none;flex-wrap:wrap;gap:6px;margin-top:6px"></div>`;
+}
+let _ctxAnalyzeResult = '';
+let _ctxAnalyzeCtx = '';
+async function _ctxAttachAnalyze(ctx){
+  const cfg = _CTX_CFG[ctx]; if(!cfg) return;
+  const target = document.getElementById(cfg.targetId);
+  const curText = (target?.value||'').trim();
+  const arr = _ctxAttach[ctx]||[];
+  const docs = arr.filter(a=>a.kind==='doc');
+  let images = arr.filter(a=>a.kind==='image').map(a=>({mediaType:a.mediaType, data:a.data}));
+  if(!curText && !docs.length && !images.length){ toast('请先填写文字,或添加图片/文档再识别整理','err'); return; }
+  // 视觉门控:未配视觉副模型 → 提示并降级纯文字(callAI 也会再保护一层)
+  if(images.length && !_effectiveVisionOK()){
+    toast('未配置视觉模型,本次仅按文字+文档整理(请管理员在 AI 设置 → 共享配置 配置视觉模型:豆包视觉/千问 Qwen-VL)','err');
+    images = [];
+  }
+  const btn = document.getElementById('ctx-ai-btn-'+ctx);
+  if(btn){btn.disabled=true;btn.textContent='⏳ 整理中...';}
+  const docText = docs.length ? docs.map(d=>`【附件文档:${d.name}】\n${(d.text||'').slice(0,6000)}`).join('\n\n') : '';
+  const result = await callAI({
+    system: cfg.system,
+    prompt: `${cfg.promptHead}\n${curText?'已填文字:\n'+curText:'(暂无文字)'}${docText?'\n附件文档内容:\n'+docText:''}${images.length?'\n(另附 '+images.length+' 张图片,请结合图片内容识别整理)':''}`,
+    maxTokens: 1500,
+    images: images.length?images:undefined,
+    _action:'ctx_attach_analyze', _actionLabel:cfg.label+' AI识别整理', _cost:1});
+  if(btn){btn.disabled=false;btn.textContent='🔍 AI 识别整理';}
+  if(!result) return;   // callAI 失败已 toast
+  _ctxAnalyzeResult = result; _ctxAnalyzeCtx = ctx;
+  _openAiOverlay(`
+    <div class="modal-hdr"><span class="modal-ttl">${cfg.overlayTitle}</span><button class="modal-cls" onclick="_closeAiOverlay()">×</button></div>
+    <div class="modal-body">
+      <div style="background:#f5f3ff;border-left:3px solid #8b5cf6;border-radius:7px;padding:9px 12px;font-size:12px;color:#5b21b6;line-height:1.7;margin-bottom:12px">
+        以下为 AI 依据 文字${docs.length?' + 文档':''}${images.length?' + 图片':''} 整理的结果,仅供参考。可「填入${cfg.label}」覆盖或「追加」,确认保存后才生效;附件不会被保存。
+      </div>
+      <div style="background:#fff;border:1px solid var(--sv);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;max-height:50vh;overflow:auto">${mdRender(result)}</div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="_aiCopyText(_ctxAnalyzeResult)">📋 复制</button>
+      <button class="btn" onclick="_applyCtxAnalyze('${ctx}',true)">↧ 追加</button>
+      <button class="btn btn-p" onclick="_applyCtxAnalyze('${ctx}',false)">↓ 填入${cfg.label}(覆盖)</button>
+    </div>`, 680);
+}
+function _applyCtxAnalyze(ctx, append){
+  const cfg = _CTX_CFG[ctx]; if(!cfg) return;
+  const target = document.getElementById(cfg.targetId);
+  if(!target){ toast('表单已关闭,无法填入','err'); _closeAiOverlay(); return; }
+  const cur = (target.value||'').trim();
+  target.value = (append && cur) ? (cur + '\n\n--- AI 识别整理 ---\n' + _ctxAnalyzeResult) : _ctxAnalyzeResult;
+  toast(append?`已追加到${cfg.label}`:`已填入${cfg.label}`);
+  _closeAiOverlay();
+}
+
 // 2. AI 总结进展:把任务的所有 progress 让 AI 输出 200 字总结
 async function aiSummarizeTaskProgress(taskId){
   const t = DB.tasks.find(x=>x.id===taskId);
@@ -7174,7 +7312,7 @@ async function removeMember(deptId, userId){
     toast('已移除','err');
     await loadDepartmentMembers();
     openMemberManageForm(deptId);
-  });
+  }, '确认移出', 'danger');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -11186,8 +11324,9 @@ function renderSharedAIConfigSection(){
           <label>视觉模型 API Key <span style="font-weight:400;color:var(--ms);font-size:11px">(独立于主模型,留空=不启用图片识别)</span></label>
           <input type="password" id="shared-vision-key" value="${h(s.visionApiKey||'')}" placeholder="视觉模型独立 Key" style="font-family:monospace;font-size:12px">
         </div>
-        <div class="fg full" style="display:block">
+        <div class="fg full" style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-p" onclick="saveSharedVisionFromForm(this)">💾 保存视觉模型</button>
+          <button class="btn" onclick="testVisionConn(this)" title="用当前填写的四项 + 一张测试图片发最小请求,验证视觉能力">🔌 测试连接</button>
         </div>
       </div>
     </div>
@@ -11301,6 +11440,40 @@ async function saveSharedVisionFromForm(btn){
   const ok = await saveSharedAIConfig({ visionProtocol, visionModelName, visionEndpoint, visionApiKey });
   if(btn){btn.disabled=false; btn.textContent=orig;}
   if(ok){ toast(visionApiKey?'✓ 视觉模型已保存,识图时自动启用':'已清空视觉模型(图片识别关闭)'); renderPage('ai'); }
+}
+
+// v33.0.17:视觉模型「测试连接」— 用表单当前值 + 一张内置测试图发最小视觉请求(验的是识图能力,不是文本连通)
+async function testVisionConn(btn){
+  if(!isAdmin()){toast('仅管理员可测试','err');return;}
+  const protocol = document.getElementById('shared-vision-protocol')?.value||'openai_compat';
+  const model    = document.getElementById('shared-vision-model')?.value.trim()||'';
+  const endpoint = document.getElementById('shared-vision-endpoint')?.value.trim()||'';
+  const key      = document.getElementById('shared-vision-key')?.value.trim()||'';
+  if(!key){toast('请先填写视觉模型 API Key','err');return;}
+  if(!model){toast('请先填写视觉模型名(豆包填接入点 ep-xxx,千问填 qwen-vl-max 等)','err');return;}
+  if(protocol!=='gemini' && !endpoint){toast('请先填写视觉模型 API 端点 URL','err');return;}
+  // 内置 1×1 PNG 测试图(仅用于验证视觉通路)
+  const TEST_IMG = {mediaType:'image/png', data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='};
+  const cfg = {key, model, endpoint};
+  const orig = btn?.textContent||'🔌 测试连接';
+  if(btn){btn.disabled=true;btn.textContent='⏳ 测试中...';}
+  try{
+    let result;
+    if(protocol==='claude'||protocol==='anthropic'){
+      result = await _callClaude('', '请回复:OK', 30, cfg, false, null, [TEST_IMG]);
+    }else if(protocol==='gemini'||protocol==='google'){
+      result = await _callGemini('', '请回复:OK', 30, cfg, [TEST_IMG]);
+    }else{
+      result = await _callOpenAICompat(endpoint, '', '请回复:OK', 30, cfg, false, null, [TEST_IMG]);
+    }
+    if(result) toast('✅ 视觉模型连接成功','ok');
+    else toast('视觉模型无返回内容,请检查模型名/端点','err');
+  }catch(e){
+    // 直接显示原始错误,便于定位(model does not exist / 无权限 / 端点错误 等)
+    toast('视觉模型连接失败:'+(e.message||e),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=orig;}
+  }
 }
 
 // 保存共享高德 Key
@@ -11628,7 +11801,7 @@ function callPhone(phone,name){
   openConfirm(`拨打 ${h(name||'')} 的电话：${cleaned}？`,()=>{
     window.location.href=`tel:${cleaned}`;
     closeModal();
-  });
+  }, '确认拨打', 'primary');
 }
 // 直接复制号码
 function copyPhone(phone){
@@ -13214,6 +13387,7 @@ function downloadImportTemplate(){
 let editingCustId=null;
 function openCustForm(id){
   editingCustId=id;
+  _ctxAttachReset('cust');   // v33.0.17:每次打开清空临时附件
   const c=id?DB.customers.find(x=>x.id===id):null;
   if(c&&!canEditCustomer(c)){toast('无权编辑他人客户','err');return;}
   const v=(k,def='')=>h(c?c[k]??def:def);
@@ -13254,7 +13428,7 @@ function openCustForm(id){
     <div class="fg"><label>客户状态<span class="req">*</span></label><select id="cf-st">${sel('status','跟进中',['活跃','跟进中','暂停','合作中','成交','流失'])}</select></div>
     <div class="f-sect">负责信息</div>
     <div class="fg"><label>负责客户经理<span class="req">*</span></label><input id="cf-at" value="${v('assignedTo',currentUser?.name||'')}" placeholder="填写员工姓名"><span class="err-m" id="e-at"></span></div>
-    <div class="fg full"><label>备注</label><textarea id="cf-no">${v('notes')}</textarea></div>
+    <div class="fg full"><label>备注</label><textarea id="cf-no">${v('notes')}</textarea>${_attachAIBox('cust')}</div>
   </div>`,
   `<button class="btn" onclick="closeModal()">取消</button><button class="btn btn-p" onclick="saveCust()">${id?'保存修改':'创建客户'}</button>`);
 }
@@ -13292,6 +13466,7 @@ async function saveCust(){
   await saveCustToDB(obj);
   if(btn){btn.disabled=false;btn.textContent=editingCustId?'保存修改':'创建客户';}
   closeModal();
+  _ctxAttachReset('cust');   // v33.0.17:保存后清空临时附件
   toast(editingCustId?`"${obj.companyName}" 已更新`:`"${obj.companyName}" 创建成功`);
 }
 function confirmDelCust(id){
@@ -13414,6 +13589,7 @@ function aiAppendContent(){
 
 function openFUForm(id,defaultCid){
   editingFUId=id;
+  _ctxAttachReset('fu');   // v33.0.17:每次打开清空临时附件
   const f=id?DB.followups.find(x=>x.id===id):null;
   if(f&&!isAdmin()&&f.createdBy!==currentUser?.id){toast('无权编辑他人记录','err');return;}
 
@@ -13465,8 +13641,12 @@ function openFUForm(id,defaultCid){
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
         <button type="button" id="ai-sum-btn" class="btn btn-ai btn-sm" onclick="aiSummarizeFU()">🤖 AI总结</button>
         <button type="button" class="btn btn-ai btn-sm" onclick="aiDraftFUScriptFromForm()" title="AI 起草可直接发出的跟进话术(正式/亲切/促单)">✍️ AI 起草话术</button>
+        <button type="button" class="btn btn-sm" onclick="_ctxAttachPick('fu')" title="添加本地图片/文档,仅用于 AI 识别整理,不会保存">📎 添加</button>
+        <button type="button" class="btn btn-ai btn-sm" id="ctx-ai-btn-fu" onclick="_ctxAttachAnalyze('fu')">🔍 AI 识别整理</button>
         <button type="button" class="tool-btn" onclick="captureLocation()" id="ff-loc-btn" style="display:none">📍 记录位置</button>
       </div>
+      <input type="file" id="ctx-attach-input-fu" multiple accept="image/*,.docx,.xlsx,.txt" style="display:none" onchange="_ctxAttachAddFiles('fu',this)">
+      <div id="ctx-attach-chips-fu" style="display:none;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
       <span class="err-m" id="e-co2"></span>
     </div>
 
@@ -13591,6 +13771,7 @@ async function saveFU(){
   await saveFUToDB(obj);
   if(btn){btn.disabled=false;btn.textContent='保存记录';}
   closeModal();
+  _ctxAttachReset('fu');   // v33.0.17:保存后清空临时附件
   toast(editingFUId?'跟进记录已更新':'跟进记录已保存 ✓');
 }
 
@@ -14883,7 +15064,10 @@ function openRaw(html, maxWidth){
   d.innerHTML=html;o.appendChild(d);document.body.appendChild(o);
   _attachModalDirtyTracking(d);  // v31
 }
-function openConfirm(msg,onOk){
+// v33.0.17:加可选按钮文案/类型参数(向后兼容)。
+// 不传 okText → 走原默认(退出/禁用/删除自动判定)→ 既有删除确认零回归。
+// okType:'primary' | 'danger'(不传时:logout 非危险,其余危险)。
+function openConfirm(msg,onOk,okText,okType){
   const fnName='_confirmOk_'+gid();
   window[fnName]=()=>{onOk();delete window[fnName];};
   const o=document.createElement('div');o.className='overlay';o.id='modal-ov';
@@ -14891,11 +15075,13 @@ function openConfirm(msg,onOk){
   o.onclick=e=>{if(e.target===o)closeModal();};
   const isLogout=msg.includes('退出登录');
   const isDisable=msg.includes('禁用');
-  const btnTxt=isLogout?'确认退出':isDisable?'确认禁用':'确认删除';
-  const btnCls=isLogout?'btn btn-p':'btn btn-d';
+  const btnTxt=okText || (isLogout?'确认退出':isDisable?'确认禁用':'确认删除');
+  const danger=(okType ? okType==='danger' : !isLogout);
+  const btnCls=danger?'btn btn-d':'btn btn-p';
+  const icon=(okText && okType!=='danger') ? '❓' : (isLogout?'🚪':'⚠️');
   // ⚠ msg 支持富文本(部分调用方传 <strong>/<br>/<div>)。
   // 安全约定:调用方若拼入用户数据(任务标题/客户名等),必须自行用 h() 转义。
-  o.innerHTML=`<div class="confirm-box"><div style="font-size:36px;margin-bottom:12px">${isLogout?'🚪':'⚠️'}</div><p style="font-size:14px;color:var(--sl);line-height:1.7">${msg}</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="closeModal()">取消</button><button class="${btnCls}" onclick="${fnName}();closeModal()">${btnTxt}</button></div></div>`;
+  o.innerHTML=`<div class="confirm-box"><div style="font-size:36px;margin-bottom:12px">${icon}</div><p style="font-size:14px;color:var(--sl);line-height:1.7">${msg}</p><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="closeModal()">取消</button><button class="${btnCls}" onclick="${fnName}();closeModal()">${btnTxt}</button></div></div>`;
   document.body.appendChild(o);
 }
 function closeModal(){const o=document.getElementById('modal-ov');if(o)o.remove();}
