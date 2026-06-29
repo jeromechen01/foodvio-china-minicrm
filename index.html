@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.17 (PWA)</title>
+<title>花花食界AI助理 · v33.0.18 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,20 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.18(2026-06-29):视觉测试图修复 + 日常运营周期更新 + AI 导入三字段判重
+    · 视觉测试图 1×1→16×16:testVisionConn 的 TEST_IMG 换成 16×16 纯色 PNG(满足视觉模型 ≥14px
+      下限),修复豆包"Minimum allowed dimension: 14 pixels"报错。其余逻辑不动。
+    · 日常运营任务周期更新(migration_v33.0.18_task_recurrence.sql:tasks 加 recur_freq/recur_anchor/
+      recur_end/recur_next_due 4 列,recur_start 复用 start_date;仅加列、无新表):类型=日常运营时表单
+      显示 频度(每日/每周/每月)+ 锚点(每周选周几 1-7 / 每月选几号 1-31)+ 结束日期;保存按 起始日+频度
+      算出 recurNextDue(_nextRecurDueFromStart,月末边界取当月最后一天)。前端检测到期(_isRecurDue:
+      today≥next_due 且未过 end):任务列表行「📋 待更新」徽章 + 橙色左边框;仪表盘「N 个日常运营待更新」
+      角标卡(统计 myTasks 维度,点击跳转类型筛选)。记录进展后 recurNextDue 顺延到下一个到期日
+      (_rollRecurDue),超 end 则清空停止提醒。本版不发站内消息(零基建防刷屏)。
+    · AI 客户导入判重升级为三字段:_findDupCust 改为 公司名 + 联系人 + 负责客户经理 全等才判重;预览顶部
+      加「🔁 全部覆盖(N)」一键把所有命中重复设为覆盖。逐条覆盖/跳过保留;覆盖仍走 saveCustToDB 带现有
+      id、保留原 createdBy;未命中正常新建。
   ══════════════════════════════════════════════════════════════════
   v33.0.17(2026-06-28):视觉测试连接 + 跟进/客户图片识别 + 确认框文案修复(纯前端,零 SQL)
     · 视觉模型「🔌 测试连接」(testVisionConn):用 AI 设置共享配置里当前填写的四项(不依赖已存值)
@@ -1860,7 +1874,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.17 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.18 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -1933,6 +1947,54 @@ const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 // ══════════════════════════════════════════════════════════
 const gid   = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
 const today = () => new Date().toISOString().slice(0,10);
+
+// ── v33.0.18:日常运营周期更新 — 本地日期工具(北京时间) ──
+function _ymdLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function _todayLocal(){ return _ymdLocal(new Date()); }
+function _parseYmd(s){ const [y,m,d]=String(s||'').split('-').map(Number); return new Date(y||1970,(m||1)-1,d||1); }  // 本地午夜
+function _daysInMonth(y, m0){ return new Date(y, m0+1, 0).getDate(); }
+// 求 >= from(Date) 的首个周期到期日(Date),按 freq/anchor
+function _recurOnOrAfter(freq, anchor, from){
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  if(freq==='daily') return d;
+  if(freq==='weekly'){
+    const iso = (d.getDay()===0)?7:d.getDay();           // 1=周一..7=周日
+    const a = Math.min(7, Math.max(1, anchor||1));
+    d.setDate(d.getDate() + ((a - iso + 7) % 7));
+    return d;
+  }
+  if(freq==='monthly'){
+    const a = Math.min(31, Math.max(1, anchor||1));
+    let y=d.getFullYear(), m=d.getMonth();
+    let day=Math.min(a, _daysInMonth(y,m));               // 月末不足取当月最后一天
+    if(day < d.getDate()){ m++; if(m>11){m=0;y++;} day=Math.min(a, _daysInMonth(y,m)); }
+    return new Date(y, m, day);
+  }
+  return d;
+}
+// 以起始日为起点求首个 >= 起始日的到期日('YYYY-MM-DD')
+function _nextRecurDueFromStart(freq, anchor, startYmd){
+  if(!freq) return null;
+  return _ymdLocal(_recurOnOrAfter(freq, anchor, _parseYmd(startYmd||_todayLocal())));
+}
+// 顺延:严格在 currentDue 之后的下一个到期日('YYYY-MM-DD')
+function _rollRecurDue(freq, anchor, currentDueYmd){
+  if(!freq||!currentDueYmd) return null;
+  const base = _parseYmd(currentDueYmd); base.setDate(base.getDate()+1);
+  return _ymdLocal(_recurOnOrAfter(freq, anchor, base));
+}
+// 某任务是否为"日常运营待更新"(到期且未过结束日)
+function _isRecurDue(t){
+  if(!t || t.taskType!=='日常运营' || !t.recurFreq || !t.recurNextDue) return false;
+  if(t.status==='archived') return false;
+  const today = _todayLocal();
+  return today >= t.recurNextDue && (!t.recurEnd || today <= t.recurEnd);
+}
+// 仪表盘角标点击 → 跳到任务列表并按"日常运营"类型筛选(到期项高亮)
+function _gotoRecurDue(){
+  tFilter.type='日常运营'; tFilter.page=1;
+  nav(document.querySelector('[data-page=tasks]'),'tasks');
+}
 const fd    = d => d ? d.slice(0,10) : '—';
 const du    = d => d ? Math.ceil((new Date(d)-new Date(today()))/86400000) : null;
 const WD    = ['日','一','二','三','四','五','六'];
@@ -2130,6 +2192,10 @@ function taskToRow(obj){
     customer_name:    obj.customerName    || '',
     created_by:       obj.createdBy       || currentUser?.id || null,
     created_by_name:  obj.createdByName   || currentUser?.name || '',
+    recur_freq:       obj.recurFreq       || null,   /* v33.0.18:日常运营周期更新 */
+    recur_anchor:     (obj.recurAnchor ?? null),
+    recur_end:        obj.recurEnd        || null,
+    recur_next_due:   obj.recurNextDue    || null,
     updated_at:       new Date().toISOString(),
   };
 }
@@ -3917,6 +3983,8 @@ function renderDash(){
     .filter(t=>t.dueDate && t.status!=='done' && t.status!=='archived' && du(t.dueDate)<=3)
     .sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''))
     .slice(0,5);
+  // v33.0.18:日常运营待更新(我作为责任人/执行人/创建人/协作者,且已到期)
+  const recurDueCount = myT.filter(_isRecurDue).length;
   return `<div class="pw">
   <div class="welcome">
     <div class="wc-text">
@@ -3934,6 +4002,13 @@ function renderDash(){
   <div class="stats-row">
     ${taskStats.map(s=>`<div class="stat-card" style="cursor:pointer" onclick="nav(document.querySelector('[data-page=tasks]'),'tasks')"><div class="stat-bar" style="background:${s.col}"></div><div class="stat-ico">${s.ico}</div><div class="stat-lbl">${s.l}</div><div class="stat-val" style="color:${s.col}">${s.v}</div><div class="stat-sub">${s.s}</div></div>`).join('')}
   </div>
+  ${recurDueCount>0?`<div onclick="_gotoRecurDue()" style="cursor:pointer;margin-bottom:16px;padding:12px 16px;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:12px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:26px">📋</div>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700;color:#92400e"><strong>${recurDueCount}</strong> 个日常运营任务待更新</div>
+      <div style="font-size:12px;color:#b45309;margin-top:2px">已到达周期更新日,点击查看并记录进展 →</div>
+    </div>
+  </div>`:''}
   ${urgentTasks.length>0?`<div class="dash-card" style="margin-bottom:16px">
     <h4>⏰ 紧迫任务(3 天内到期或已逾期)</h4>
     ${urgentTasks.map(t=>{
@@ -4274,7 +4349,8 @@ function renderTaskListView(filtered, source, mode){
             ${cd?`<button class="btn btn-d btn-sm" onclick="confirmDelTask('${t.id}')">删除</button>`:!ce?`<span style="font-size:11px;color:var(--ms)">只读</span>`:''}`;
         }
 
-        return `<div class="tbl-row ${colsClass} ${checked?'row-checked':''}" onclick="${showBulk?`toggleTaskSelection('${t.id}')`:`openTaskDetail('${t.id}')`}">
+        const recurDue = _isRecurDue(t);
+        return `<div class="tbl-row ${colsClass} ${checked?'row-checked':''}" ${recurDue?'style="border-left:3px solid #f59e0b"':''} onclick="${showBulk?`toggleTaskSelection('${t.id}')`:`openTaskDetail('${t.id}')`}">
           ${chkCell}
           <div>
             <div class="co-n">${(()=>{
@@ -4284,7 +4360,7 @@ function renderTaskListView(filtered, source, mode){
               const isCollabUnaccepted = myCollab && !myCollab.acceptedAt;
               const shouldDot = (isPrimaryUnaccepted || isCollabUnaccepted) && t.status!=='done' && t.status!=='archived';
               return shouldDot ? '<span title="未确认接收" style="display:inline-block;width:7px;height:7px;background:#dc2626;border-radius:50%;margin-right:5px;vertical-align:middle"></span>' : '';
-            })()}${h(t.title)}</div>
+            })()}${recurDue?'<span class="bdg" style="background:#fef3c7;color:#92400e;font-size:9px;padding:1px 6px;border-radius:7px;margin-right:5px">📋 待更新</span>':''}${h(t.title)}</div>
             <div class="co-i">${h(t.description||'').slice(0,60)}${(t.description||'').length>60?'…':''}</div>
           </div>
           <span style="font-size:12px;color:var(--sl)">${h(t.category||'其他')}${t.taskType?`<br><span class="bdg" style="background:#eef2ff;color:#3730a3;font-size:9px;padding:1px 5px;border-radius:7px;margin-top:2px;display:inline-block">${h(t.taskType)}</span>`:''}</span>
@@ -5181,6 +5257,18 @@ function _filterExecList(q){
   });
 }
 
+// v33.0.18:类型=日常运营时显示周期字段
+function _tfToggleRecur(){
+  const box=document.getElementById('tf-recur-box');
+  if(box) box.style.display = (document.getElementById('tf-type')?.value==='日常运营')?'block':'none';
+}
+// 频度联动锚点(每周→选周几;每月→选几号;每日→无锚点)
+function _tfToggleRecurAnchor(){
+  const f=document.getElementById('tf-recur-freq')?.value;
+  const w=document.getElementById('tf-recur-weekly'); if(w) w.style.display=(f==='weekly')?'block':'none';
+  const m=document.getElementById('tf-recur-monthly'); if(m) m.style.display=(f==='monthly')?'block':'none';
+}
+
 function openTaskForm(id){
   editingTaskId=id;
   _taskAttachReset();   // v33.0.14:每次打开表单清空临时附件
@@ -5241,10 +5329,35 @@ function openTaskForm(id){
     <div class="fg"><label>分类</label>
       <select id="tf-cat">${sel('category','其他',TSK_CATEGORY)}</select></div>
     <div class="fg"><label>类型</label>
-      <select id="tf-type">
+      <select id="tf-type" onchange="_tfToggleRecur()">
         <option value="" ${!(t&&t.taskType)?'selected':''}>(未分类)</option>
         ${TSK_TYPE.map(c=>`<option value="${c}" ${t&&t.taskType===c?'selected':''}>${c}</option>`).join('')}
       </select></div>
+    <div class="fg full" id="tf-recur-box" style="display:${(t&&t.taskType==='日常运营')?'block':'none'}">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px">
+        <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:8px">🔁 周期更新设置(日常运营)</div>
+        <div class="form-grid" style="gap:8px">
+          <div class="fg"><label>更新频度</label>
+            <select id="tf-recur-freq" onchange="_tfToggleRecurAnchor()">
+              <option value="" ${!(t&&t.recurFreq)?'selected':''}>— 不设置 —</option>
+              <option value="daily" ${t&&t.recurFreq==='daily'?'selected':''}>每日</option>
+              <option value="weekly" ${t&&t.recurFreq==='weekly'?'selected':''}>每周</option>
+              <option value="monthly" ${t&&t.recurFreq==='monthly'?'selected':''}>每月</option>
+            </select></div>
+          <div class="fg" id="tf-recur-weekly" style="display:${(t&&t.recurFreq==='weekly')?'block':'none'}"><label>每周几</label>
+            <select id="tf-recur-anchor-w">
+              ${[1,2,3,4,5,6,7].map(d=>`<option value="${d}" ${t&&t.recurFreq==='weekly'&&t.recurAnchor===d?'selected':''}>周${['一','二','三','四','五','六','日'][d-1]}</option>`).join('')}
+            </select></div>
+          <div class="fg" id="tf-recur-monthly" style="display:${(t&&t.recurFreq==='monthly')?'block':'none'}"><label>每月几号</label>
+            <select id="tf-recur-anchor-m">
+              ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${t&&t.recurFreq==='monthly'&&t.recurAnchor===d?'selected':''}>${d} 号</option>`).join('')}
+            </select></div>
+          <div class="fg"><label>结束日期(选填)</label>
+            <input type="date" id="tf-recur-end" value="${v('recurEnd')}"></div>
+        </div>
+        <div style="font-size:11px;color:var(--ms);margin-top:6px">起始日期用上方「起始日期」。保存后按 起始日 + 频度 算出"下次应更新日";到期会在仪表盘/任务列表提醒,记录进展后自动顺延。</div>
+      </div>
+    </div>
     <div class="fg"><label>优先级<span class="req">*</span></label>
       <select id="tf-pri">${sel('priority','normal',TSK_PRIORITY_KEYS.map(k=>({value:k,label:TSK_PRIORITY[k].label})))}</select></div>
     <div class="fg"><label>状态</label>
@@ -5344,12 +5457,33 @@ async function saveTask(){
     name: cb.dataset.name||'',
   }));
 
+  // v33.0.18:日常运营周期更新字段(非日常运营 → 全部 null)
+  const taskType = document.getElementById('tf-type')?.value||null;
+  let recurFreq=null, recurAnchor=null, recurEnd=null, recurNextDue=null;
+  if(taskType==='日常运营'){
+    recurFreq = document.getElementById('tf-recur-freq')?.value || null;
+    if(recurFreq){
+      if(recurFreq==='weekly')      recurAnchor = parseInt(document.getElementById('tf-recur-anchor-w')?.value||'1',10);
+      else if(recurFreq==='monthly')recurAnchor = parseInt(document.getElementById('tf-recur-anchor-m')?.value||'1',10);
+      recurEnd = document.getElementById('tf-recur-end')?.value || null;
+      const startForRecur = (document.getElementById('tf-start')?.value) || _todayLocal();
+      // 编辑时频度/锚点未变且已有下次到期 → 保留;否则以起始日重算
+      if(existing && existing.recurFreq===recurFreq && existing.recurAnchor===recurAnchor && existing.recurNextDue){
+        recurNextDue = existing.recurNextDue;
+      }else{
+        recurNextDue = _nextRecurDueFromStart(recurFreq, recurAnchor, startForRecur);
+      }
+      if(recurEnd && recurNextDue && recurNextDue > recurEnd) recurNextDue = null;  // 超结束日 → 不提醒
+    }
+  }
+
   const obj={
     id: editingTaskId || uuid(),
     title,
     description:   document.getElementById('tf-desc')?.value.trim()||'',
     category:      document.getElementById('tf-cat')?.value||'其他',
-    taskType:      document.getElementById('tf-type')?.value||null,
+    taskType,
+    recurFreq, recurAnchor, recurEnd, recurNextDue,
     executors,
     priority:      document.getElementById('tf-pri')?.value||'normal',
     status,
@@ -6000,6 +6134,12 @@ async function saveProgress(){
   };
   if(newStatus==='slow') updateRow.blocker_reason=blockers;
   else if(t.status==='slow' && newStatus!=='slow') updateRow.blocker_reason='';  // 解除阻塞清空原因
+  // v33.0.18:日常运营任务记录进展后,把"下次应更新日"顺延到下一个到期日;超结束日则停止提醒
+  if(t.taskType==='日常运营' && t.recurFreq && t.recurNextDue){
+    let nd = _rollRecurDue(t.recurFreq, t.recurAnchor, t.recurNextDue);
+    if(t.recurEnd && nd && nd > t.recurEnd) nd = null;
+    updateRow.recur_next_due = nd;
+  }
   const {error:e2}=await supa.from('tasks').update(updateRow).eq('id',t.id);
   if(e2){toast('同步任务状态失败:'+e2.message,'err');}
 
@@ -9467,6 +9607,7 @@ function openAIImportCustPreview(){
       <div style="margin-bottom:12px;padding:8px 12px;background:#f0f9ff;border-left:3px solid #3b82f6;border-radius:6px;font-size:12px;color:#1e40af;line-height:1.6">
         💡 检查 AI 提取的客户条目,点 ☑ 切换是否导入,可逐条修改字段。无公司名或无电话的条目不会被导入(系统要求)。
       </div>
+      <div id="ai-imp-dup-bar" style="margin-bottom:12px">${_aiImportDupBarHTML()}</div>
       <div id="ai-imp-cust-cards-wrap">${_aiImportCustDraft.map((c,i)=>_renderAIImpCustCard(c,i)).join('')}</div>
     </div>
     <div class="modal-ft">
@@ -9480,17 +9621,42 @@ function openAIImportCustPreview(){
 // 单卡片渲染
 // v33.0.15:客户导入去重 — 规范化(去首尾空格 + 忽略大小写)
 function _normCustKey(s){ return String(s||'').trim().toLowerCase(); }
-// 按「公司名 + 联系人」双字段全等判重(单字段相同不算);返回命中的现有客户或 null
+// v33.0.18:按「公司名 + 联系人 + 负责客户经理」三字段全等判重(任一不同即不算重复);返回命中的现有客户或 null
 function _findDupCust(c){
   const cn = _normCustKey(c.companyName);
   if(!cn) return null;
   const ct = _normCustKey(c.contactName);
-  return (DB.customers||[]).find(x=>_normCustKey(x.companyName)===cn && _normCustKey(x.contactName)===ct) || null;
+  const mg = _normCustKey(c.assignedTo);
+  return (DB.customers||[]).find(x=>
+    _normCustKey(x.companyName)===cn &&
+    _normCustKey(x.contactName)===ct &&
+    _normCustKey(x.assignedTo)===mg) || null;
 }
 // 设置某条草稿的重复处理方式(overwrite=覆盖更新 / skip=跳过)
 function _setImpCustDup(idx, val){
   const c = _aiImportCustDraft[idx];
   if(c) c._dupAction = val;
+}
+// v33.0.18:疑似重复条数(未跳过且命中三字段判重)
+function _aiImportCustDupCount(){
+  return _aiImportCustDraft.filter(c=>!c._skip && _findDupCust(c)).length;
+}
+// v33.0.18:一键把所有命中重复的草稿设为「覆盖更新」
+function _overwriteAllImpDups(){
+  let n=0;
+  _aiImportCustDraft.forEach(c=>{ if(!c._skip && _findDupCust(c)){ c._dupAction='overwrite'; n++; } });
+  _renderAIImpCustCards();
+  const bar=document.getElementById('ai-imp-dup-bar'); if(bar) bar.innerHTML=_aiImportDupBarHTML();
+  toast(n?`已将 ${n} 条疑似重复设为「覆盖更新」`:'当前无疑似重复');
+}
+// 全部覆盖工具条 HTML(随重复数显示)
+function _aiImportDupBarHTML(){
+  const dn=_aiImportCustDupCount();
+  if(!dn) return '';
+  return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;font-size:12px;color:#9a3412">
+    <span>⚠ 检测到 <strong>${dn}</strong> 条疑似重复(公司名 + 联系人 + 负责经理 一致)</span>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="_overwriteAllImpDups()">🔁 全部覆盖(${dn})</button>
+  </div>`;
 }
 
 function _renderAIImpCustCard(c, idx){
@@ -9503,7 +9669,7 @@ function _renderAIImpCustCard(c, idx){
   const dup = _findDupCust(c);
   if(dup && c._dupAction===undefined) c._dupAction = 'overwrite';
   const dupBanner = dup ? `<div style="margin:6px 0;padding:7px 10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;font-size:12px;color:#9a3412;line-height:1.6">
-      ⚠ <strong>疑似重复</strong>:已存在客户「${h(dup.companyName)} · ${h(dup.contactName||'无联系人')}」。
+      ⚠ <strong>疑似重复</strong>:已存在客户「${h(dup.companyName)} · ${h(dup.contactName||'无联系人')} · ${h(dup.assignedTo||'无经理')}」。
       <select onchange="_setImpCustDup(${idx},this.value)" style="margin-left:6px;font-size:12px">
         <option value="overwrite" ${c._dupAction!=='skip'?'selected':''}>覆盖更新现有客户</option>
         <option value="skip" ${c._dupAction==='skip'?'selected':''}>跳过此条(不导入)</option>
@@ -11453,7 +11619,7 @@ async function testVisionConn(btn){
   if(!model){toast('请先填写视觉模型名(豆包填接入点 ep-xxx,千问填 qwen-vl-max 等)','err');return;}
   if(protocol!=='gemini' && !endpoint){toast('请先填写视觉模型 API 端点 URL','err');return;}
   // 内置 1×1 PNG 测试图(仅用于验证视觉通路)
-  const TEST_IMG = {mediaType:'image/png', data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='};
+  const TEST_IMG = {mediaType:'image/png', data:'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAFElEQVR42mNkYPhfz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC'};
   const cfg = {key, model, endpoint};
   const orig = btn?.textContent||'🔌 测试连接';
   if(btn){btn.disabled=true;btn.textContent='⏳ 测试中...';}
