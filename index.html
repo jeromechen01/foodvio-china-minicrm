@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.18 (PWA)</title>
+<title>花花食界AI助理 · v33.0.21 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -21,6 +21,48 @@
 <!--
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
+  ══════════════════════════════════════════════════════════════════
+  v33.0.21(2026-06-30):标签展开协作者/执行人 + 缓存容量防御 + Realtime 防抖(纯前端,零 SQL / 零新表 / 零新 CDN)
+    · req① 任务标签展开相关人:renderTaskList 责任人列「+N」徽章升级为「+N 协作/执行」可点击徽章,
+      点击 _showTaskPeople 就地弹出小浮层(position:fixed,带边界处理 + 点击外部/Esc 关闭),列出
+      主负责人 / 全部协作者(DB.taskAssignees role=collaborator)/ 全部执行人(getTaskExecutors,个人👤
+      与部门🏢 分别标注)。纯本地数据、名字 h() 转义,不发请求不写库。
+    · req② sessionStorage 容量防御:saveCache 由「空 catch 静默吞掉」升级为「超配额优雅降级」——
+      先整存,失败则逐级裁剪历史明细类大表后重试(taskProgress→smsLogs→followups→messages 各保留最近
+      N 条,极端兜底清空历史明细),核心表(customers/tasks/profiles 等)始终保全;多级仍失败 →
+      console.warn + 一次性 toast 轻提示,绝不抛错中断主流程。未引入 IndexedDB。
+    · req③ Realtime 批量防抖:新增轻量 _debounce(fn,delay);subscribeRealtime 各表 loadXxx 包成独立
+      防抖实例(300ms),快速连续变更合并为一次 reload,消除批量操作的全表 reload 风暴。仅作用于
+      Realtime 触发的 reload;主动操作后的即时 await loadXxx() 不受影响。订阅结构/心跳不变。
+  ══════════════════════════════════════════════════════════════════
+  v33.0.20(2026-06-30):客户状态历史 + 全局搜索增强 + 今日待办聚合卡(1 条 SQL 新表 + 纯前端)
+    · req① 客户状态变更历史:新建 customer_status_history 表(migration_v33.0.20_cust_status_history.sql,
+      带 RLS,口径对齐 customers——子查询 EXISTS(customers) 自动受客户表 RLS 过滤,防 N1 跨账号泄露)。
+      只读审计日志,不进 emptyDB/loadCache/saveCache/Realtime 四生命周期点、不进 custToRow。写入两路径:
+      saveCustToDB(单个 update,保存前取旧值)+ applyBulkChangeCustStatus(批量,逐个取旧值),仅状态真
+      变化才独立 insert(try/catch 包裹,失败不影响主保存)。客户详情新增「🕓 状态历史」按钮,按需
+      supa.select().eq(customer_id).order(changed_at desc) 拉取展示(旧→新 · 操作人 · 时间),空态提示,
+      不缓存不 Realtime。
+    · req② 命令栏全局关键词搜索:输入即时本地搜索(oninput→_cmdLiveSearch),跨「客户/任务/跟进」分组
+      展示、点击跳转详情(openCustDetail/openTaskDetail)。扩展 _cmdMatchCustomers(+电话/备注)、
+      _cmdMatchTasks(+描述),新增 _cmdMatchFollowups(按内容)。只搜本地已加载数据(受既有 RLS 过滤),
+      不新增请求;按 Enter 仍走原 AI 意图分类/动作路由——补充分支,不替换。
+    · req③ 仪表盘「今日待办」聚合卡:欢迎区下方新增,按当前用户汇总四类(今日/逾期跟进、逾期任务、
+      日常运营待更新、降温客户),复用 nextFollowUpDate/myOverdue/_isRecurDue/_coolingCustomers 判定,
+      点击跳转对应模块(followups/tasks/_gotoRecurDue/openCoolingList)。纯展示,不发消息不写库。
+  ══════════════════════════════════════════════════════════════════
+  v33.0.19(2026-06-30):改派历史 + 周报同比 + 导出执行人(纯前端,零 SQL / 零新表 / 零新 CDN)
+    · req① 改派留痕:改派成功后追加一条说明性 task_progress 记录(复用既有表,不新增表)。
+      单个改派(doReassign)原本不写进展,现追加「🔄 改派:新增/移除协作责任人…(操作人:X)」;
+      批量改派(applyBulkChangeAssignee)原有进展升级为统一「🔄 改派:原责任人「旧」→ 新责任人「新」
+      (原责任人降为协作责任人;操作人:X)」格式。两条路径均不改 status / progress%(progress 前后相等
+      或为 null,时间线不显示进度箭头),不影响日常运营顺延。doReassign 末尾补 loadTaskProgress 刷新。
+    · req② 周报同比/环比:generateReport 本地生成的「一、本周跟进概览」新增「📊 较上一周期」对比块,
+      用既有 lastWeekRange() 同口径计算上期(targetFU 同一过滤源,仅换日期范围),覆盖 跟进总条数 /
+      覆盖客户数 / 签约成功数 / A级客户跟进数,展示「较上周 ±N」涨🟢↑降🔴↓持平⚪(mdRender 会转义 HTML,
+      故用 markdown 安全的彩色圆点表达涨绿降红)。不改导出、不改 AI 周报生成主流程。
+    · req③ Excel 导出补执行人:exportTasksToExcel 在「责任人」列后新增「执行人」列,数据取 getTaskExecutors,
+      个人显示姓名、部门标注「(部门)」,逗号分隔;exportTaskToWord 概要表同步加「执行人」行。
   ══════════════════════════════════════════════════════════════════
   v33.0.18(2026-06-29):视觉测试图修复 + 日常运营周期更新 + AI 导入三字段判重
     · 视觉测试图 1×1→16×16:testVisionConn 的 TEST_IMG 换成 16×16 纯色 PNG(满足视觉模型 ≥14px
@@ -1874,7 +1916,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.18 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.21 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -2488,15 +2530,45 @@ function refreshTasks(){ /* 由 UI 模块实现 */ }
 // ── 离线缓存（sessionStorage）
 // ══════════════════════════════════════════════════════════
 const CACHE_KEY='huahua_v12_cache';
+let _cacheQuotaWarned=false;   // v33.0.21:配额提示只弹一次
 function saveCache(){
-  try{sessionStorage.setItem(CACHE_KEY,JSON.stringify({
+  // 完整快照(核心表 customers/tasks/profiles 等始终保全)
+  const snap={
     customers:DB.customers,followups:DB.followups,profiles:DB.profiles,
     tasks:DB.tasks,taskProgress:DB.taskProgress,
     departments:DB.departments,departmentMembers:DB.departmentMembers,
     messages:DB.messages,taskAssignees:DB.taskAssignees,  /* v32.2 修复 R2.2:补全两张新表 */
     smsLogs:DB.smsLogs,  /* v33.0.4:群发短信记录 */
     taskExecutors:DB.taskExecutors  /* v33.0.13:执行人 */
-  }));}catch(e){}
+  };
+  try{ sessionStorage.setItem(CACHE_KEY,JSON.stringify(snap)); return; }
+  catch(e){
+    // v33.0.21:超配额优雅降级 — 从大到小裁剪低价值历史明细类大表后重试,核心表尽量保全
+    console.warn('[saveCache] 写入失败(疑似配额超限),尝试裁剪历史明细类大表后重试:', e?.name||e);
+  }
+  // 保留最近 N 条(按 createdAt 倒序);非数组或本就不超则原样返回
+  const recent=(arr,n)=>{
+    if(!Array.isArray(arr)||arr.length<=n) return arr;
+    return [...arr].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,n);
+  };
+  // 逐级裁剪:taskProgress → smsLogs → followups → messages → 极端兜底清空历史明细
+  const tiers=[
+    ()=>{ snap.taskProgress=recent(DB.taskProgress,200); },
+    ()=>{ snap.smsLogs=recent(DB.smsLogs,100); },
+    ()=>{ snap.followups=recent(DB.followups,300); },
+    ()=>{ snap.messages=recent(DB.messages,100); },
+    ()=>{ snap.taskProgress=[]; snap.smsLogs=[]; snap.messages=[]; },  // 仅保核心工作集
+  ];
+  for(const trim of tiers){
+    try{ trim(); sessionStorage.setItem(CACHE_KEY,JSON.stringify(snap)); return; }
+    catch(e){ /* 继续下一级裁剪 */ }
+  }
+  // 仍失败 → 轻提示一次,绝不抛错中断主流程(在线使用不受影响)
+  console.warn('[saveCache] 多级裁剪后仍无法写入本地缓存,已放弃本次缓存');
+  if(!_cacheQuotaWarned){
+    _cacheQuotaWarned=true;
+    try{ toast('本地缓存空间不足,离线数据可能不完整','err'); }catch(_){}
+  }
 }
 function loadCache(){
   try{
@@ -3185,6 +3257,21 @@ async function doReassign(taskId, fnName, btn){
     }catch(e){console.warn(e);}
   }
 
+  // v33.0.19:改派留痕 — 追加一条说明性 task_progress 记录(复用既有表;不改 status/progress%)
+  if(addedCount>0 || deletedCount>0){
+    const addNames = toAdd.map(c=>c.name||'(未命名)').join('、');
+    const delNames = toDelete.map(a=>a.userName||getUserName(a.userId)||'(未命名)').join('、');
+    const segs = [];
+    if(addNames) segs.push(`新增协作责任人「${addNames}」`);
+    if(delNames) segs.push(`移除协作责任人「${delNames}」`);
+    try{
+      await supa.from('task_progress').insert(progressToRow({
+        taskId: taskId,
+        content: `🔄 改派:${segs.join(';')}(操作人:${currentUser?.name||'(未知)'})`,
+      }));
+    }catch(e){console.warn('[doReassign] 改派留痕写入失败:', e);}
+  }
+
   delete window[fnName];
   closeModal();
 
@@ -3198,6 +3285,7 @@ async function doReassign(taskId, fnName, btn){
     toast('✓ '+parts.join(' · '));
   }
   await loadTaskAssignees();
+  await loadTaskProgress();  // v33.0.19:刷新进展时间线,改派留痕即时可见
   await loadTasks();
   if(curPage==='tasks'||curPage==='teamTasks') renderPage(curPage);
 }
@@ -3733,41 +3821,62 @@ async function restoreSession(){
 // ── 实时订阅
 // ══════════════════════════════════════════════════════════
 let _realtimeCh=null;
+// v33.0.21:轻量防抖 — 快速连续触发只在最后一次后 delay 执行一次
+function _debounce(fn, delay){
+  let t=null;
+  return function(){ const args=arguments, ctx=this; clearTimeout(t); t=setTimeout(()=>fn.apply(ctx,args), delay); };
+}
+// v33.0.21:Realtime 批量风暴防抖 — 各表独立 debounce 实例(300ms),合并 N 次快速变更为一次 reload。
+// 只作用于 Realtime 触发的 reload;主动操作后的即时 await loadXxx() 不走这里,保持即时反馈。
+const _RT_DELAY=300;
+const _rtReload={
+  customers:         _debounce(()=>loadCustomers(),         _RT_DELAY),
+  followups:         _debounce(()=>loadFollowups(),         _RT_DELAY),
+  profiles:          _debounce(()=>loadProfiles(),          _RT_DELAY),
+  tasks:             _debounce(()=>loadTasks(),             _RT_DELAY),
+  taskProgress:      _debounce(()=>loadTaskProgress(),      _RT_DELAY),
+  departments:       _debounce(()=>loadDepartments(),       _RT_DELAY),
+  departmentMembers: _debounce(()=>loadDepartmentMembers(), _RT_DELAY),
+  messages:          _debounce(()=>loadMessages(),          _RT_DELAY),
+  taskAssignees:     _debounce(()=>loadTaskAssignees(),     _RT_DELAY),
+  taskExecutors:     _debounce(()=>loadTaskExecutors(),     _RT_DELAY),
+  smsLogs:           _debounce(()=>loadSmsLogs(),           _RT_DELAY),
+};
 function subscribeRealtime(){
   if(_realtimeCh)return;
   _realtimeCh=supa.channel('crm-changes')
     .on('postgres_changes',{event:'*',schema:'public',table:'customers'},
-      ()=>loadCustomers()
+      ()=>_rtReload.customers()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'followups'},
-      ()=>loadFollowups()
+      ()=>_rtReload.followups()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},
-      ()=>loadProfiles()
+      ()=>_rtReload.profiles()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'tasks'},
-      ()=>loadTasks()
+      ()=>_rtReload.tasks()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'task_progress'},
-      ()=>loadTaskProgress()
+      ()=>_rtReload.taskProgress()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'departments'},
-      ()=>loadDepartments()
+      ()=>_rtReload.departments()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'department_members'},
-      ()=>loadDepartmentMembers()
+      ()=>_rtReload.departmentMembers()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'messages'},
-      ()=>loadMessages()
+      ()=>_rtReload.messages()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'task_assignees'},
-      ()=>loadTaskAssignees()
+      ()=>_rtReload.taskAssignees()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'task_executors'},
-      ()=>loadTaskExecutors()
+      ()=>_rtReload.taskExecutors()
     )
     .on('postgres_changes',{event:'*',schema:'public',table:'sms_logs'},
-      ()=>loadSmsLogs()
+      ()=>_rtReload.smsLogs()
     )
     .subscribe();
 }
@@ -3985,6 +4094,28 @@ function renderDash(){
     .slice(0,5);
   // v33.0.18:日常运营待更新(我作为责任人/执行人/创建人/协作者,且已到期)
   const recurDueCount = myT.filter(_isRecurDue).length;
+
+  // ── v33.0.20:「今日待办」聚合(按当前用户,复用既有检测函数;纯展示,不发消息不写库)──
+  const _todayY = today();
+  const myPendingFU = vf.filter(f=>{
+    if(!f.nextFollowUpDate || f.nextFollowUpDate>_todayY) return false;
+    const c=DB.customers.find(x=>x.id===f.customerId);
+    if(c && (c.status==='流失'||c.status==='暂停')) return false;
+    return f.createdBy===currentUser?.id || c?.createdBy===currentUser?.id || (c?.assignedTo && c.assignedTo===currentUser?.name);
+  });
+  const todoFollowCount = new Set(myPendingFU.map(f=>f.customerId)).size;
+  const myCoolingCount = _coolingCustomers().filter(x=>{
+    const c=x.c;
+    return c.createdBy===currentUser?.id || (c.assignedTo && c.assignedTo===currentUser?.name);
+  }).length;
+  const todoItems=[
+    {ico:'📅', l:'今日/逾期跟进', v:todoFollowCount, sub:'待联系客户', col:'#2563eb', act:`nav(document.querySelector('[data-page=followups]'),'followups')`},
+    {ico:'⏰', l:'逾期任务',       v:myOverdue,       sub:'已过截止',   col:'#dc2626', act:`nav(document.querySelector('[data-page=tasks]'),'tasks')`},
+    {ico:'📋', l:'日常运营待更新', v:recurDueCount,   sub:'到周期更新日', col:'#d97706', act:`_gotoRecurDue()`},
+    {ico:'❄️', l:'降温客户',       v:myCoolingCount,  sub:'久未跟进',   col:'#0891b2', act:`openCoolingList()`},
+  ];
+  const todoTotal = todoItems.reduce((s,x)=>s+x.v,0);
+
   return `<div class="pw">
   <div class="welcome">
     <div class="wc-text">
@@ -3992,6 +4123,15 @@ function renderDash(){
       <p>花花食界AI助理 · ${scopeNote} · ${vc.length} 客户 · ${vf.length} 条跟进 · ${myT.length} 个任务 🌿</p>
     </div>
     <div class="wc-ico">🌿</div>
+  </div>
+
+  <!-- v33.0.20:今日待办聚合卡(按当前用户,复用既有检测函数,点击跳转处理) -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px">
+    <div style="font-size:15px;font-weight:700;color:var(--ink)">📋 今日待办（本人）${todoTotal>0?`<span style="margin-left:6px;background:#dc2626;color:#fff;font-size:11px;padding:1px 8px;border-radius:99px">${todoTotal}</span>`:''}</div>
+    <span style="font-size:11px;color:var(--ms)">点击卡片跳转处理</span>
+  </div>
+  <div class="stats-row">
+    ${todoItems.map(s=>`<div class="stat-card" style="cursor:pointer" onclick="${s.act}"><div class="stat-bar" style="background:${s.v>0?s.col:'#cbd5e1'}"></div><div class="stat-ico">${s.ico}</div><div class="stat-lbl">${s.l}</div><div class="stat-val" style="color:${s.v>0?s.col:'#94a3b8'}">${s.v}</div><div class="stat-sub">${s.sub}</div></div>`).join('')}
   </div>
 
   <!-- A3 修复:我的任务概览(永远显示在客户数据之前,因为任务是员工日常工作核心) -->
@@ -4370,7 +4510,12 @@ function renderTaskListView(filtered, source, mode){
             <div class="prog-bar"><div class="prog-fill ${t.status==='slow'?'slow':''}" style="width:${t.progress||0}%"></div></div>
             <div class="prog-num">${t.progress||0}%</div>
           </div>
-          <span style="font-size:12px;color:var(--sl);font-weight:500">${h(t.assigneeName||getUserName(t.assigneeId))}${(()=>{const cnt=getTaskAssignees(t.id).filter(a=>a.role!=='primary'&&a.userId!==t.createdBy).length;return cnt>0?`<span class="bdg" style="background:#dbeafe;color:#1e40af;font-size:10px;margin-left:4px;padding:1px 5px;border-radius:8px">+${cnt}</span>`:'';})()}</span>
+          <span style="font-size:12px;color:var(--sl);font-weight:500">${h(t.assigneeName||getUserName(t.assigneeId))}${(()=>{
+            const collabCnt=(DB.taskAssignees||[]).filter(a=>a.taskId===t.id && a.role==='collaborator').length;
+            const execCnt=getTaskExecutors(t.id).length;
+            const extra=collabCnt+execCnt;
+            return extra>0?`<span class="bdg" style="background:#dbeafe;color:#1e40af;font-size:10px;margin-left:4px;padding:1px 6px;border-radius:8px;cursor:pointer" title="查看协作者/执行人" onclick="event.stopPropagation();_showTaskPeople(event,'${t.id}')">+${extra} 协作/执行</span>`:'';
+          })()}</span>
           <span class="${dCls}" style="font-size:11px">${dueLabel(t)}</span>
           <div class="acts" onclick="event.stopPropagation()">${acts}</div>
         </div>`;
@@ -4382,6 +4527,47 @@ function renderTaskListView(filtered, source, mode){
     <button class="pg-btn" ${tFilter.page===pages?'disabled':''} onclick="tFilter.page++;refreshTasks()">›</button>
     <span style="font-size:11px;color:var(--ms);margin-left:7px">共${total}条</span>
   </div>`:''}`;
+}
+
+// v33.0.21:任务相关人小浮层 — 点击「+N 协作/执行」就地弹出,列出主负责人/协作者/执行人
+// 纯本地数据(DB.taskAssignees + getTaskExecutors),不发请求、不写库;名字全部 h() 转义
+function _showTaskPeople(ev, taskId){
+  if(ev){ ev.stopPropagation(); }
+  document.getElementById('task-people-pop')?.remove();
+  const t=DB.tasks.find(x=>x.id===taskId);
+  if(!t) return;
+  const primaryName=t.assigneeName||getUserName(t.assigneeId)||'—';
+  const collabs=(DB.taskAssignees||[]).filter(a=>a.taskId===taskId && a.role==='collaborator');
+  const execs=getTaskExecutors(taskId);
+  const collabItems=collabs.map(a=>{ const p=DB.profiles.find(x=>x.id===a.userId); return '👤 '+h(p?.name||a.userName||'(未知)'); });
+  const execItems=execs.map(e=>{
+    if(e.executorType==='department'){ const d=DB.departments.find(x=>x.id===e.executorId); return '🏢 '+h(d?.name||e.executorName||'(部门)')+'(部门)'; }
+    const p=DB.profiles.find(x=>x.id===e.executorId); return '👤 '+h(p?.name||e.executorName||'(未知)');
+  });
+  const sec=(title,items)=>items.length?`<div style="margin-bottom:7px"><div style="font-size:10px;font-weight:700;color:var(--ms);margin-bottom:3px">${title}</div>${items.map(x=>`<div style="font-size:12px;color:var(--ink);padding:2px 0;line-height:1.5">${x}</div>`).join('')}</div>`:'';
+  const pop=document.createElement('div');
+  pop.id='task-people-pop';
+  pop.style.cssText='position:fixed;z-index:1400;background:#fff;border:1px solid var(--sv);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.16);padding:11px 13px;max-width:260px;min-width:180px';
+  pop.innerHTML=`<div style="font-weight:700;color:var(--ink);margin-bottom:7px;font-size:13px">👥 任务相关人</div>
+    ${sec('主负责人', ['👤 '+h(primaryName)])}
+    ${sec('协作责任人（'+collabs.length+'）', collabItems)}
+    ${sec('执行人（'+execs.length+'）', execItems)}`;
+  document.body.appendChild(pop);
+  // 定位到点击元素附近(带边界处理)
+  const r=(ev&&ev.target&&ev.target.getBoundingClientRect)?ev.target.getBoundingClientRect():{bottom:80,top:60,left:40};
+  const pw=pop.offsetWidth, ph=pop.offsetHeight;
+  let left=r.left, top=r.bottom+6;
+  if(left+pw>window.innerWidth-10) left=window.innerWidth-pw-10;
+  if(top+ph>window.innerHeight-10) top=r.top-ph-6;
+  pop.style.left=Math.max(10,left)+'px';
+  pop.style.top=Math.max(10,top)+'px';
+  // 点击外部 / Esc 关闭
+  setTimeout(()=>{
+    const close=(e)=>{ if(e.type==='keydown'&&e.key!=='Escape') return; if(e.type==='click'&&pop.contains(e.target)) return;
+      pop.remove(); document.removeEventListener('click',close,true); document.removeEventListener('keydown',close,true); };
+    document.addEventListener('click',close,true);
+    document.addEventListener('keydown',close,true);
+  },0);
 }
 
 // ── 批量操作工具条 ────────────────────────────────────────
@@ -4669,13 +4855,15 @@ async function applyBulkChangeAssignee(){
       });
     }catch(e){console.warn('[bulk reassign] 新 primary 插入失败:', e);}
 
-    // 3. 写系统进展
-    await supa.from('task_progress').insert(progressToRow({
-      taskId: id,
-      content: `责任人改派:${oldAssigneeName} → ${newAssignee.name}(原责任人保留为协作)`,
-      progressBefore: t.progress||0,
-      progressAfter:  t.progress||0,
-    }));
+    // 3. 写系统进展 — v33.0.19:改派留痕(说明性记录,记录操作人;不改 progress%,故无进度箭头)
+    if(oldAssigneeId !== newAssigneeId){
+      try{
+        await supa.from('task_progress').insert(progressToRow({
+          taskId: id,
+          content: `🔄 批量改派:责任人「${oldAssigneeName||'(空)'}」→「${newAssignee.name||''}」(操作人:${currentUser?.name||'(系统)'})`
+        }));
+      }catch(e){ console.warn('[bulkReassign] 留痕失败:', e); }
+    }
 
     // 4. 通知新负责人
     sendMessage({
@@ -6716,6 +6904,14 @@ function exportTaskToWord(taskId){
     ['截止日期',     fmt(t.dueDate)],
     ['完成时间',     fmt(t.completedAt?t.completedAt.slice(0,19).replace('T',' '):'')],
     ['责任人',       fmt(t.assigneeName||getUserName(t.assigneeId))],
+    ['执行人',       fmt(getTaskExecutors(t.id).map(e=>{   // v33.0.19:执行人(部门标注为部门)
+      if(e.executorType==='department'){
+        const dept = DB.departments.find(d=>d.id===e.executorId);
+        return `${dept?.name||e.executorName||'(部门)'}(部门)`;
+      }
+      const p = DB.profiles.find(x=>x.id===e.executorId);
+      return p?.name||e.executorName||'(未知)';
+    }).join('，'))],
     ['指派人',       fmt(t.assignerName||(t.assignerId?getUserName(t.assignerId):''))],
     ['所属部门/项目',fmt(t.departmentName)],
     ['关联客户',     fmt(t.customerName)],
@@ -6844,6 +7040,14 @@ function exportTasksToExcel(){
     dueDate:      t.dueDate||'',
     completedAt:  t.completedAt?t.completedAt.slice(0,10):'',
     assigneeName: t.assigneeName||getUserName(t.assigneeId)||'',
+    executorNames: getTaskExecutors(t.id).map(e=>{   // v33.0.19:执行人列(部门标注为部门)
+      if(e.executorType==='department'){
+        const dept = DB.departments.find(d=>d.id===e.executorId);
+        return `${dept?.name||e.executorName||'(部门)'}(部门)`;
+      }
+      const p = DB.profiles.find(x=>x.id===e.executorId);
+      return p?.name||e.executorName||'(未知)';
+    }).join('，'),
     assignerName: t.assignerName||(t.assignerId?getUserName(t.assignerId):''),
     departmentName: t.departmentName||'',
     customerName: t.customerName||'',
@@ -6866,6 +7070,7 @@ function exportTasksToExcel(){
     {k:'dueDate',        l:'截止日期'},
     {k:'completedAt',    l:'完成日期'},
     {k:'assigneeName',   l:'责任人'},
+    {k:'executorNames',  l:'执行人'},
     {k:'assignerName',   l:'指派人'},
     {k:'departmentName', l:'所属部门/项目'},
     {k:'customerName',   l:'关联客户'},
@@ -9132,11 +9337,25 @@ async function applyBulkChangeCustStatus(){
   if(btn){btn.disabled=true;btn.textContent='⏳ 更新中...';}
   let ok=0, fail=0;
   for(const id of ids){
+    const oldCust = DB.customers.find(c=>c.id===id);   // v33.0.20:取旧状态
     const {error, data} = await supa.from('customers').update({status:newSt, updated_at: new Date().toISOString()}).eq('id', id).select();
     if(error || !data || data.length===0){
       console.error('[bulkChangeCustStatus]', id, error);
       fail++;
-    }else ok++;
+    }else{
+      ok++;
+      // v33.0.20:状态真变化才记历史(独立 insert,不进 custToRow;失败不影响主流程)
+      if(oldCust && oldCust.status !== newSt){
+        try{
+          await supa.from('customer_status_history').insert({
+            customer_id: id,
+            old_status:  oldCust.status || null,
+            new_status:  newSt,
+            changed_by:  currentUser?.id || null,
+          });
+        }catch(e){ console.warn('[bulkChangeCustStatus] 状态历史写入失败:', e); }
+      }
+    }
   }
   closeModal();
   selectedCustIds.clear();
@@ -10020,10 +10239,24 @@ function renderPage(p){
 
 async function saveCustToDB(obj){
   const row=custToRow(obj);
-  const{error}=obj.id&&DB.customers.find(c=>c.id===obj.id)
+  const isUpdate = obj.id && DB.customers.find(c=>c.id===obj.id);
+  // v33.0.20:状态变更历史 — 保存前取旧值(仅 update 分支)
+  const oldCust = isUpdate ? DB.customers.find(c=>c.id===obj.id) : null;
+  const{error}=isUpdate
     ? await supa.from('customers').update(row).eq('id',obj.id)
     : await supa.from('customers').insert({...row,created_at:new Date().toISOString()});
   if(error){toast('保存失败：'+error.message,'err');return;}
+  // v33.0.20:状态真变化时,独立 insert 一条历史(绝不进 custToRow;失败不影响主保存)
+  if(oldCust && oldCust.status !== obj.status){
+    try{
+      await supa.from('customer_status_history').insert({
+        customer_id: obj.id,
+        old_status:  oldCust.status || null,
+        new_status:  obj.status,
+        changed_by:  currentUser?.id || null,
+      });
+    }catch(e){ console.warn('[saveCustToDB] 状态历史写入失败:', e); }
+  }
   await loadCustomers();
 }
 
@@ -12278,6 +12511,23 @@ async function generateReport(){
   const aFU=fFU.filter(f=>cMap[f.customerId]?.customerLevel==='A');
   const totalCusts=new Set(fFU.map(f=>f.customerId)).size;
 
+  // ── v33.0.19:周报同比/环比 — 上一周期(lastWeekRange)同口径计算,纯展示 ──
+  const _pr=lastWeekRange();
+  const _pFU=targetFU.filter(f=>f.createdAt>=_pr.from&&f.createdAt<=_pr.to);
+  const prevStats={
+    follow: _pFU.length,
+    custs:  new Set(_pFU.map(f=>f.customerId)).size,
+    signed: _pFU.filter(f=>f.outcome==='签约成功').length,
+    aFollow:_pFU.filter(f=>cMap[f.customerId]?.customerLevel==='A').length,
+  };
+  // 涨绿(🟢↑)降红(🔴↓)零变化中性(⚪),markdown 安全(mdRender 会转义 HTML 标签)
+  const cmpStr=(cur,prev)=>{
+    const d=cur-prev;
+    if(d>0) return `较上周 +${d} 🟢↑`;
+    if(d<0) return `较上周 ${d} 🔴↓`;
+    return `较上周 持平 ⚪`;
+  };
+
   repState.loading=true;repState.report='';repState.done=false;
   repState.streaming=false;repState.isEditing=false;
   repState.isLocalDone=false;repState.aiRefining=false;
@@ -12342,6 +12592,12 @@ ${(()=>{ const td=getTasksReportData(r.from,r.to,isAdmin()?repState.mgr:null); r
   let md=`# 花花食界 | 客户跟进周报\n\n`;
   md+=`**周期：** ${r.from} ~ ${r.to}  |  **生成：** ${new Date().toLocaleString('zh-CN')}\n\n---\n\n`;
   md+=`## 一、本周跟进概览\n\n本周期共完成 **${fFU.length}** 次跟进，覆盖 **${totalCusts}** 家客户，涉及 **${Object.keys(byMgr).length}** 位客户经理。${signed.length?`签约成功 **${signed.length}** 单。`:''}\n\n`;
+  // v33.0.19:与上一周期(同口径)对比 — 关键指标同比/环比
+  md+=`**📊 较上一周期：**\n\n`;
+  md+=`- 跟进总条数 **${fFU.length}** 条（${cmpStr(fFU.length,prevStats.follow)}）\n`;
+  md+=`- 覆盖客户数 **${totalCusts}** 家（${cmpStr(totalCusts,prevStats.custs)}）\n`;
+  md+=`- 签约成功数 **${signed.length}** 单（${cmpStr(signed.length,prevStats.signed)}）\n`;
+  md+=`- A级客户跟进 **${aFU.length}** 条（${cmpStr(aFU.length,prevStats.aFollow)}）\n\n`;
   if(!fFU.length)md+=`> ⚠ 本周期暂无跟进记录，请各客户经理及时录入。\n\n`;
 
   md+=`## 二、A级重点客户动态\n\n`;
@@ -13666,8 +13922,10 @@ function openCustDetail(id){
     <button class="btn btn-ai btn-sm" onclick="aiDraftFUScript('${id}')" title="AI 起草可直接发出的跟进话术(正式/亲切/促单)">✍️ AI 起草话术</button>
     <button class="btn btn-ai btn-sm" onclick="aiPreMeetingBrief('${id}')" title="AI 生成会前简报:快照/历史要点/可能诉求/沟通议程/风险">📋 AI 会前简报</button>
     ${canEdit?`<button class="btn btn-ai btn-sm" id="health-btn-${id}" onclick="aiAssessHealthOne('${id}')" title="AI 评估客户健康度并缓存到档案">💗 AI 评估健康度</button>`:''}
+    <button class="btn btn-sm" onclick="_loadCustStatusHistory('${id}')" title="查看该客户状态变更历史">🕓 状态历史</button>
   </div>
-  <div id="ai-advice-${id}" style="display:none;padding:10px;background:#f5f3ff;border-radius:8px;margin-bottom:12px;border:1px solid #e9d5ff;font-size:12px"></div>`;
+  <div id="ai-advice-${id}" style="display:none;padding:10px;background:#f5f3ff;border-radius:8px;margin-bottom:12px;border:1px solid #e9d5ff;font-size:12px"></div>
+  <div id="cust-status-hist-${id}" style="display:none;padding:10px 12px;background:#f8fafc;border:1px solid var(--sv);border-radius:8px;margin-bottom:12px;font-size:12px"></div>`;
 
   const fields=[['phone','手机'],['email','邮箱'],['city','城市'],['address','详细地址'],['industry','行业'],['source','来源'],['assignedTo','负责经理'],['createdAt','创建日期'],['updatedAt','最后跟进']];
   const body=`<div class="det-hdr">
@@ -13701,6 +13959,42 @@ function openCustDetail(id){
     ${canEdit?`<button class="btn btn-p" onclick="closeModal();openCustForm('${id}')">✏️ 编辑客户</button>`:''}
   </div>`;
   openRaw(body);
+}
+
+// v33.0.20:按需拉取客户状态变更历史(不缓存到 DB.*、不接 Realtime;受 customer_status_history RLS 过滤)
+async function _loadCustStatusHistory(id){
+  const box=document.getElementById(`cust-status-hist-${id}`);
+  if(!box) return;
+  // 切换:已展开则收起
+  if(box.style.display!=='none' && box.dataset.loaded==='1'){ box.style.display='none'; box.dataset.loaded='0'; return; }
+  box.style.display='block';
+  box.innerHTML='<span style="color:var(--ms)">🕓 加载状态历史…</span>';
+  try{
+    const {data,error}=await supa.from('customer_status_history')
+      .select('*').eq('customer_id',id).order('changed_at',{ascending:false});
+    if(error) throw error;
+    const rows=data||[];
+    if(rows.length===0){
+      box.innerHTML='<div style="color:var(--ms);text-align:center;padding:8px">暂无变更记录</div>';
+    }else{
+      box.innerHTML='<div style="font-weight:700;color:var(--ink);margin-bottom:6px">🕓 状态变更历史（'+rows.length+'）</div>'
+        + rows.map(r=>{
+            const who=getUserName(r.changedBy||r.changed_by)||'(未知)';
+            const ts=(r.changedAt||r.changed_at)?new Date(r.changedAt||r.changed_at).toLocaleString('zh-CN',{hour12:false}):'';
+            const oldS=(r.oldStatus??r.old_status)||'(空)';
+            const newS=(r.newStatus??r.new_status)||'';
+            return `<div style="padding:6px 0;border-top:1px solid var(--sv);line-height:1.7">
+              <span style="color:var(--ms)">${h(oldS)}</span> <span style="color:var(--g)">→</span> <strong>${h(newS)}</strong>
+              <span style="color:var(--ms);font-size:11px"> · ${h(who)} · ${ts}</span>
+            </div>`;
+          }).join('');
+    }
+    box.dataset.loaded='1';
+  }catch(e){
+    console.warn('[_loadCustStatusHistory]', e);
+    box.innerHTML='<div style="color:#dc2626">加载失败,请重试</div>';
+    box.dataset.loaded='0';
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -14971,9 +15265,9 @@ function openCmdBar(){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:18px">⌘</span>
         <input id="cmdbar-input" autocomplete="off" spellcheck="false"
-          placeholder="问点什么或下个指令… 例:本周跟进了几家 / 去客户列表 / 给XX公司起草话术 / 今日规划"
+          placeholder="搜索客户/任务/跟进,或下指令… 例:输入关键词即时搜索 / 去客户列表 / 给XX公司起草话术"
           style="flex:1;border:none;outline:none;font-size:15px;background:transparent;color:var(--ink)"
-          onkeydown="_cmdBarKey(event)">
+          onkeydown="_cmdBarKey(event)" oninput="_cmdLiveSearch(this.value)">
         <button class="btn btn-ai btn-sm" id="cmdbar-go" onclick="_cmdBarSubmit()">↵ 执行</button>
       </div>
       <div style="font-size:11px;color:var(--ms);margin-top:7px">Enter 执行 · Esc 关闭 · 支持「导航 / 执行动作 / 只读查询」三类</div>
@@ -15093,7 +15387,8 @@ function _cmdMatchCustomers(name){
   if(exact.length) return exact.slice(0,8);
   const sub=cs.filter(c=>{
     const cn=(c.companyName||'').toLowerCase(), ct=(c.contactName||'').toLowerCase();
-    return (cn&&(cn.includes(n)||n.includes(cn))) || (ct&&ct.includes(n));
+    const ph=(c.phone||'').toLowerCase(), nt=(c.notes||'').toLowerCase();   // v33.0.20:扩展电话/备注
+    return (cn&&(cn.includes(n)||n.includes(cn))) || (ct&&ct.includes(n)) || (ph&&ph.includes(n)) || (nt&&nt.includes(n));
   });
   return sub.slice(0,8);
 }
@@ -15103,8 +15398,55 @@ function _cmdMatchTasks(title){
   const ts=visibleTasks();
   const exact=ts.filter(t=>(t.title||'').toLowerCase()===n);
   if(exact.length) return exact.slice(0,8);
-  const sub=ts.filter(t=>{ const tt=(t.title||'').toLowerCase(); return tt&&(tt.includes(n)||n.includes(tt)); });
+  const sub=ts.filter(t=>{
+    const tt=(t.title||'').toLowerCase(), dd=(t.description||'').toLowerCase();   // v33.0.20:扩展描述
+    return (tt&&(tt.includes(n)||n.includes(tt))) || (dd&&dd.includes(n));
+  });
   return sub.slice(0,8);
+}
+// v33.0.20:跟进记录轻量匹配(按内容命中,只搜本地已加载数据,受既有 RLS 过滤)
+function _cmdMatchFollowups(kw){
+  const n=String(kw||'').trim().toLowerCase();
+  if(!n) return [];
+  const fs=visibleFollowups();
+  const sub=fs.filter(f=>(f.content||'').toLowerCase().includes(n));
+  // 最近优先
+  return sub.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
+}
+
+// v33.0.20:全局关键词搜索(命令栏即时本地搜索,补充分支,不替换 AI 意图路由)
+// 输入普通关键词时跨「客户/任务/跟进」分组展示,点击跳转详情;只搜本地已加载数据(受既有 RLS 过滤)。
+function _cmdLiveSearch(q){
+  const r=document.getElementById('cmdbar-result');
+  if(!r) return;
+  const s=String(q||'').trim();
+  if(s.length<1){ r.style.display='none'; r.innerHTML=''; return; }
+  const custs=_cmdMatchCustomers(s).slice(0,6);
+  const tasks=_cmdMatchTasks(s).slice(0,6);
+  const fus=_cmdMatchFollowups(s).slice(0,6);
+  const sections=[];
+  if(custs.length){
+    sections.push(`<div style="font-size:12px;font-weight:700;color:var(--ms);margin:4px 0 4px">👥 客户（${custs.length}）</div>`
+      + custs.map(c=>`<button class="btn btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:5px" onclick="closeCmdBar();openCustDetail('${c.id}')">${h(c.companyName||c.contactName||'(未命名)')} <span style="color:var(--ms);font-size:11px">${h(c.contactName||'')}${c.phone?' · '+h(c.phone):''}${c.customerLevel?' · '+c.customerLevel+'级':''}</span></button>`).join(''));
+  }
+  if(tasks.length){
+    sections.push(`<div style="font-size:12px;font-weight:700;color:var(--ms);margin:8px 0 4px">📋 任务（${tasks.length}）</div>`
+      + tasks.map(t=>`<button class="btn btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:5px" onclick="closeCmdBar();openTaskDetail('${t.id}')">${h(t.title||'(无标题)')} <span style="color:var(--ms);font-size:11px">${TSK_STATUS[normTaskStatus(t.status)]?.label||h(t.status||'')}${t.category?' · '+h(t.category):''}</span></button>`).join(''));
+  }
+  if(fus.length){
+    sections.push(`<div style="font-size:12px;font-weight:700;color:var(--ms);margin:8px 0 4px">📝 跟进（${fus.length}）</div>`
+      + fus.map(f=>{
+          const c=DB.customers.find(x=>x.id===f.customerId);
+          const snip=(f.content||'').replace(/\s+/g,' ').slice(0,40);
+          return `<button class="btn btn-sm" style="display:block;width:100%;text-align:left;margin-bottom:5px" onclick="closeCmdBar();openCustDetail('${f.customerId}')">${h(c?.companyName||'未知客户')} <span style="color:var(--ms);font-size:11px">${fd(f.createdAt)} · ${h(snip)}${(f.content||'').length>40?'…':''}</span></button>`;
+        }).join(''));
+  }
+  r.style.display='block';
+  if(sections.length===0){
+    r.innerHTML=`<div style="font-size:13px;color:var(--ms)">未找到匹配「${h(s)}」的客户/任务/跟进。按 <b>Enter</b> 让 AI 理解你的意图。</div>`;
+  }else{
+    r.innerHTML=`<div style="font-size:11px;color:var(--ms);margin-bottom:6px">🔎 本地搜索结果 · 点击跳转 · 按 Enter 改用 AI 理解</div>${sections.join('')}`;
+  }
 }
 
 // 候选列表(实体不唯一时让用户点选,绝不默认选第一个)
