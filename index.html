@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.21 (PWA)</title>
+<title>花花食界AI助理 · v33.0.22 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -22,6 +22,9 @@
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
+  v33.0.22(2026-07-11):PWA 桌面安装确认 + 日常运营去掉重复"结束日期"(纯前端,零 SQL / 零新表 / 零新 CDN)
+    · req① PWA 桌面安装:核对 manifest.webmanifest 已 display=standalone、名称/192+512 图标齐全、start_url 相对路径 → 无需改代码,浏览器地址栏即可"安装为桌面应用"。
+    · req② 删日常运营重复"结束日期":移除表单 tf-recur-end 输入框;保存时 recurEnd 改从截止日期 tf-due 取值(周期终止点复用截止日期)。recur_end 列/taskToRow/saveProgress 顺延停止逻辑均不动。
   v33.0.21(2026-06-30):标签展开协作者/执行人 + 缓存容量防御 + Realtime 防抖(纯前端,零 SQL / 零新表 / 零新 CDN)
     · req① 任务标签展开相关人:renderTaskList 责任人列「+N」徽章升级为「+N 协作/执行」可点击徽章,
       点击 _showTaskPeople 就地弹出小浮层(position:fixed,带边界处理 + 点击外部/Esc 关闭),列出
@@ -1916,7 +1919,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.21 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.22 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -5540,10 +5543,8 @@ function openTaskForm(id){
             <select id="tf-recur-anchor-m">
               ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}" ${t&&t.recurFreq==='monthly'&&t.recurAnchor===d?'selected':''}>${d} 号</option>`).join('')}
             </select></div>
-          <div class="fg"><label>结束日期(选填)</label>
-            <input type="date" id="tf-recur-end" value="${v('recurEnd')}"></div>
         </div>
-        <div style="font-size:11px;color:var(--ms);margin-top:6px">起始日期用上方「起始日期」。保存后按 起始日 + 频度 算出"下次应更新日";到期会在仪表盘/任务列表提醒,记录进展后自动顺延。</div>
+        <div style="font-size:11px;color:var(--ms);margin-top:6px">起始日期用上方「起始日期」,周期终止点用下方「截止日期」。保存后按 起始日 + 频度 算出"下次应更新日";到期会在仪表盘/任务列表提醒,记录进展后自动顺延;超过截止日期后不再提醒。</div>
       </div>
     </div>
     <div class="fg"><label>优先级<span class="req">*</span></label>
@@ -5653,7 +5654,7 @@ async function saveTask(){
     if(recurFreq){
       if(recurFreq==='weekly')      recurAnchor = parseInt(document.getElementById('tf-recur-anchor-w')?.value||'1',10);
       else if(recurFreq==='monthly')recurAnchor = parseInt(document.getElementById('tf-recur-anchor-m')?.value||'1',10);
-      recurEnd = document.getElementById('tf-recur-end')?.value || null;
+      recurEnd = document.getElementById('tf-due')?.value || null;  // v33.0.22:周期终止点复用截止日期
       const startForRecur = (document.getElementById('tf-start')?.value) || _todayLocal();
       // 编辑时频度/锚点未变且已有下次到期 → 保留;否则以起始日重算
       if(existing && existing.recurFreq===recurFreq && existing.recurAnchor===recurAnchor && existing.recurNextDue){
