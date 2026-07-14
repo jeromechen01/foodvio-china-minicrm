@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.22 (PWA)</title>
+<title>花花食界AI助理 · v33.0.23 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -22,6 +22,10 @@
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
+  v33.0.23(2026-07-14):修复"执行人无法添加进展"缺陷(纯前端,零 SQL / 零新表 / 零新 CDN)
+    · 根因:openProgressForm 入口权限误用 canEditTask(排除执行人/协作者),应为 canRecordProgress(含执行人/协作者)。
+    · 唯一改动:openProgressForm 内 if(!canEditTask(t)) → if(!canRecordProgress(t))。
+    · 严禁连带:onColDrop/quickChangeStatus/archiveTaskAction/unarchiveTaskAction 的 canEditTask 保持不变(改状态/归档动作,执行人本就无权)。后端 RLS is_task_member() 已覆盖执行人 → 零 SQL。
   v33.0.22(2026-07-11):PWA 桌面安装确认 + 日常运营去掉重复"结束日期"(纯前端,零 SQL / 零新表 / 零新 CDN)
     · req① PWA 桌面安装:核对 manifest.webmanifest 已 display=standalone、名称/192+512 图标齐全、start_url 相对路径 → 无需改代码,浏览器地址栏即可"安装为桌面应用"。
     · req② 删日常运营重复"结束日期":移除表单 tf-recur-end 输入框;保存时 recurEnd 改从截止日期 tf-due 取值(周期终止点复用截止日期)。recur_end 列/taskToRow/saveProgress 顺延停止逻辑均不动。
@@ -1919,7 +1923,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.22 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.23 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -6239,7 +6243,7 @@ let editingProgressTaskId=null;
 function openProgressForm(taskId){
   const t=DB.tasks.find(x=>x.id===taskId);
   if(!t){toast('任务不存在','err');return;}
-  if(!canEditTask(t)){toast('无权对此任务添加进展','err');return;}
+  if(!canRecordProgress(t)){toast('无权对此任务添加进展','err');return;}
   editingProgressTaskId=taskId;
   openModal(`📝 添加进展 - ${h(t.title)}`,`
   <div class="form-grid">
