@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
-<title>花花食界AI助理 · v33.0.23 (PWA)</title>
+<title>花花食界AI助理 · v33.0.24 (PWA)</title>
 <!-- ===== PWA(v33.0.5)— 全部相对路径(GitHub Pages 子路径 /foodvio-china-minicrm/)===== -->
 <link rel="manifest" href="manifest.webmanifest"/>
 <meta name="theme-color" content="#16a34a"/>
@@ -22,6 +22,31 @@
   花花食界客户与任务管理系统 v33.0 (3.3 Beta) RELEASE
   北京花花食界食品科技有限公司 · 内部客户与任务管理系统
   ══════════════════════════════════════════════════════════════════
+  v33.0.24(2026-07-21):进展编辑留痕 + 父子任务模型第一批地基(3 条 SQL:tasks +2 列 / task_progress +3 列 / 1 条 additive RLS;零新表 / 零新 CDN)
+    · req① 进展记录编辑:renderProgressTimelineItem 新增"✏️ 编辑"入口(canEditProg = admin OR 记录本人
+      OR canEditTask(t) 即任务责任人/指派人/创建人/leader,符合决策7)。openEditProgressForm/saveProgressEdit
+      只 update content/blockers/next_action + edited/edited_at/edited_by 三列留痕,绝不改
+      progress_before/progress_after/created_by/created_at(不篡改原始进度与作者)。时间线上"✎ 已编辑 ·
+      时间 · 编辑人"留痕展示。migration_v33.0.24b_progress_edit.sql;progressToRow 补三列白名单。
+    · req② 父子任务模型(第一批基础 CRUD):tasks +task_mode('single'|'multi')/parent_task_id 两列
+      (migration_v33.0.24a;taskToRow 补白名单)。三种语义:单一任务(存量默认 single,行为零变化)/
+      父任务(multi 且无 parent,项目容器,不记进展)/子任务(parent_task_id 非空,普通叶子任务)。
+      新建任务表单顶部"任务模式"选择(编辑时锁定不可互转);多任务模式隐藏 类型/日常运营周期/进度/状态/
+      执行人,出现子任务编辑区(标题*/责任人*/截止/优先级,可增删,已存子任务删除需"待删/撤销"二次确认)。
+      子任务写库复用 saveTaskToDB(含 task_assignees 主责任人同步 Z1.1 + 指派通知),parentTaskId=父id、
+      assigner=项目经理,部门/客户/分类继承项目;A2 同理:非 admin 拆子任务给他人必须选部门。
+      删除项目=连带删除全部子任务(confirmDelTask 文案提示 + 二次确认)。
+    · req③ 父任务进度/状态汇总:recalcParentTask(parentId) — 进度=子任务 progress 平均(四舍五入,无子
+      任务=0);状态:全部完成→done(补 completed_at),有动工(in_progress/slow/ahead/部分done)→in_progress,
+      否则 new;已归档项目不回算。触发点:saveProgress/applyStatusChange/saveTaskToDB(子任务变动)/
+      deleteTaskFromDB(删子任务)/保存项目表单后。父任务禁止:添加进展(openProgressForm 守卫)、看板拖拽
+      改状态(onColDrop 守卫)、快捷状态流转(详情页隐藏)。
+    · req④ 展示(基础版):详情页父任务"📁 项目"标识 + 子任务列表(标题/责任人/优先级/状态/进度,点击进入)
+      + 隐藏"添加进展";子任务显示"📁 所属项目"可点击回父任务。列表视图父任务"📁 项目"徽章 + "子任务
+      完成N/共M",子任务副行显示所属项目名;父任务行隐藏 📝 添加进展按钮。层级折叠留第二批。
+    · req⑤ additive RLS(migration_v33.0.24c):新增 tasks_select_children_of_my_parent SELECT 策略
+      (父任务创建者可见其项目下全部子任务;同命令多策略取 OR,不改动/不删除任何现有策略)。子任务写入
+      仍走既有 is_task_member。部署先按 a/b/c 顺序跑 3 条 SQL 并两账号验证。
   v33.0.23(2026-07-14):修复"执行人无法添加进展"缺陷(纯前端,零 SQL / 零新表 / 零新 CDN)
     · 根因:openProgressForm 入口权限误用 canEditTask(排除执行人/协作者),应为 canRecordProgress(含执行人/协作者)。
     · 唯一改动:openProgressForm 内 if(!canEditTask(t)) → if(!canRecordProgress(t))。
@@ -1923,7 +1948,7 @@ input[type=range].tsk-prog{width:100%;accent-color:#16a34a;cursor:pointer}
         <div class="sb-stat-r"><span class="sb-stat-l">待跟进预警</span><span class="sb-stat-v" id="sb-ov" style="color:#fca5a5">0</span></div>
       </div>
     </nav>
-    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.23 (PWA)</div>
+    <div class="sb-foot">北京花花食界食品科技有限公司<br>© 2026 · AI助理 v33.0.24 (PWA)</div>
   </aside>
   <div id="main">
     <div id="topbar">
@@ -2245,6 +2270,8 @@ function taskToRow(obj){
     recur_anchor:     (obj.recurAnchor ?? null),
     recur_end:        obj.recurEnd        || null,
     recur_next_due:   obj.recurNextDue    || null,
+    task_mode:        obj.taskMode        || 'single', /* v33.0.24:'single'|'multi'(父任务) */
+    parent_task_id:   obj.parentTaskId    || null,     /* v33.0.24:非空=子任务 */
     updated_at:       new Date().toISOString(),
   };
 }
@@ -2261,6 +2288,9 @@ function progressToRow(obj){
     created_by:        obj.createdBy        || currentUser?.id || null,
     created_by_name:   obj.createdByName    || currentUser?.name || '',
     created_at:        obj.createdAt        || new Date().toISOString(),
+    edited:            obj.edited === true,             /* v33.0.24:编辑留痕 */
+    edited_at:         obj.editedAt         ?? null,
+    edited_by:         obj.editedBy         ?? null,
   };
 }
 function deptToRow(obj){
@@ -2456,6 +2486,14 @@ function teamTasks(includeArchived=false){
   );
   if(!includeArchived) list = list.filter(t=>t.status!=='archived');
   return list;
+}
+// ── v33.0.24:父子任务辅助 ──────────────────────────────
+// 父任务(项目容器):task_mode='multi' 且无 parentTaskId,不直接记进展,进度/状态由子任务汇总
+function isParentTask(t){ return !!t && t.taskMode==='multi' && !t.parentTaskId; }
+// 某父任务(项目)下的全部子任务
+function childTasksOf(parentId){
+  if(!parentId) return [];
+  return DB.tasks.filter(x=>x.parentTaskId===parentId);
 }
 // 某任务的进展记录(按时间倒序)
 function visibleProgress(taskId){
@@ -4489,7 +4527,7 @@ function renderTaskListView(filtered, source, mode){
             ${cd?`<button class="btn btn-d btn-sm" onclick="confirmDelTask('${t.id}')">删除</button>`:!ce?`<span style="font-size:11px;color:var(--ms)">只读</span>`:''}`;
         }else{
           acts = `
-            <button class="btn btn-sm" onclick="openProgressForm('${t.id}')" title="添加进展">📝</button>
+            ${!isParentTask(t)?`<button class="btn btn-sm" onclick="openProgressForm('${t.id}')" title="添加进展">📝</button>`:''}
             ${t.status!=='done'&&t.status!=='archived'?`<button class="btn btn-ai btn-sm" id="ai-row-btn-${t.id}" onclick="aiSuggestNextAction('${t.id}',true)" title="AI 建议下一步">💡</button>`:''}
             ${ce?`<button class="btn btn-sm" onclick="openTaskForm('${t.id}')">编辑</button>`:''}
             ${ce && t.status==='done' ? `<button class="btn btn-sm" onclick="archiveTaskAction('${t.id}')" title="归档">📦</button>` : ''}
@@ -4507,8 +4545,20 @@ function renderTaskListView(filtered, source, mode){
               const isCollabUnaccepted = myCollab && !myCollab.acceptedAt;
               const shouldDot = (isPrimaryUnaccepted || isCollabUnaccepted) && t.status!=='done' && t.status!=='archived';
               return shouldDot ? '<span title="未确认接收" style="display:inline-block;width:7px;height:7px;background:#dc2626;border-radius:50%;margin-right:5px;vertical-align:middle"></span>' : '';
-            })()}${recurDue?'<span class="bdg" style="background:#fef3c7;color:#92400e;font-size:9px;padding:1px 6px;border-radius:7px;margin-right:5px">📋 待更新</span>':''}${h(t.title)}</div>
-            <div class="co-i">${h(t.description||'').slice(0,60)}${(t.description||'').length>60?'…':''}</div>
+            })()}${recurDue?'<span class="bdg" style="background:#fef3c7;color:#92400e;font-size:9px;padding:1px 6px;border-radius:7px;margin-right:5px">📋 待更新</span>':''}${isParentTask(t)?'<span class="bdg" style="background:#eef2ff;color:#3730a3;font-size:9px;padding:1px 6px;border-radius:7px;margin-right:5px">📁 项目</span>':''}${h(t.title)}</div>
+            <div class="co-i">${(()=>{
+              // v33.0.24:父任务显示子任务汇总;子任务显示所属项目名
+              if(isParentTask(t)){
+                const kids=childTasksOf(t.id);
+                const done=kids.filter(k=>normTaskStatus(k.status)==='done').length;
+                return `🗂 子任务 完成${done}/共${kids.length}`;
+              }
+              if(t.parentTaskId){
+                const pt=DB.tasks.find(x=>x.id===t.parentTaskId);
+                if(pt) return `📁 ${h(pt.title)}${t.description?' · '+h(t.description.slice(0,40))+(t.description.length>40?'…':''):''}`;
+              }
+              return h(t.description||'').slice(0,60)+((t.description||'').length>60?'…':'');
+            })()}</div>
           </div>
           <span style="font-size:12px;color:var(--sl)">${h(t.category||'其他')}${t.taskType?`<br><span class="bdg" style="background:#eef2ff;color:#3730a3;font-size:9px;padding:1px 5px;border-radius:7px;margin-top:2px;display:inline-block">${h(t.taskType)}</span>`:''}</span>
           <span><span class="bdg ${pr.bdg}"><span class="pri-dot ${pr.dot}"></span>${pr.label}</span></span>
@@ -5407,6 +5457,7 @@ async function onColDrop(e, targetStatus){
   if(!t){toast('任务不存在','err');return;}
   if(t.status === targetStatus) return; // 同列,无操作
   if(!canEditTask(t)){toast('无权操作此任务','err');return;}
+  if(isParentTask(t)){toast('项目(多任务)的进度/状态由子任务汇总,不能手动切换','err');return;}  // v33.0.24
 
   // R4 修复:v29 中 slow/ahead 都是工作状态,直接切换不阻断
   // 用户如果想说明"为什么进度缓慢/超前",可在任务详情页"添加进展"
@@ -5507,6 +5558,13 @@ function openTaskForm(id){
   openModal(`${id?'✏️ 编辑任务':'➕ 新建任务'}`,`
   <div class="form-grid">
     <div class="f-sect">基本信息</div>
+    <div class="fg full"><label>任务模式${id?'(编辑时锁定,不可互转)':''}</label>
+      <select id="tf-mode" onchange="_tfToggleMode()" ${id?'disabled':''}>
+        <option value="single" ${(t?.taskMode)!=='multi'?'selected':''}>单一任务(默认)</option>
+        <option value="multi" ${t?.taskMode==='multi'?'selected':''}>📁 多任务(项目)— 拆分为子任务分派责任人</option>
+      </select>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 多任务(项目)不直接记进展;进度/状态由子任务自动汇总。</div>
+    </div>
     <div class="fg full"><label>任务标题<span class="req">*</span></label>
       <input id="tf-title" value="${v('title')}" placeholder="如:Q2 销售目标 300 万跟进"><span class="err-m" id="e-tf-title"></span></div>
     <div class="fg full">
@@ -5523,7 +5581,7 @@ function openTaskForm(id){
     </div>
     <div class="fg"><label>分类</label>
       <select id="tf-cat">${sel('category','其他',TSK_CATEGORY)}</select></div>
-    <div class="fg"><label>类型</label>
+    <div class="fg" id="tf-fg-type"><label>类型</label>
       <select id="tf-type" onchange="_tfToggleRecur()">
         <option value="" ${!(t&&t.taskType)?'selected':''}>(未分类)</option>
         ${TSK_TYPE.map(c=>`<option value="${c}" ${t&&t.taskType===c?'selected':''}>${c}</option>`).join('')}
@@ -5553,13 +5611,13 @@ function openTaskForm(id){
     </div>
     <div class="fg"><label>优先级<span class="req">*</span></label>
       <select id="tf-pri">${sel('priority','normal',TSK_PRIORITY_KEYS.map(k=>({value:k,label:TSK_PRIORITY[k].label})))}</select></div>
-    <div class="fg"><label>状态</label>
+    <div class="fg" id="tf-fg-status"><label>状态</label>
       <select id="tf-status">${(()=>{
         // R2 修复:历史 blocked/review 值通过 normTaskStatus 映射到新状态,确保下拉有 selected 项
         const cur = t ? normTaskStatus(t.status) : 'new';
         return TSK_STATUS_KEYS.map(k=>`<option value="${k}" ${cur===k?'selected':''}>${TSK_STATUS[k].label}</option>`).join('');
       })()}</select></div>
-    <div class="fg"><label>进度 (<span id="tf-prog-num">${(t?t.progress:0)||0}</span>%)</label>
+    <div class="fg" id="tf-fg-prog"><label>进度 (<span id="tf-prog-num">${(t?t.progress:0)||0}</span>%)</label>
       <input type="range" min="0" max="100" step="5" id="tf-prog" class="tsk-prog" value="${(t?t.progress:0)||0}" oninput="document.getElementById('tf-prog-num').textContent=this.value"></div>
 
     <div class="f-sect">时间安排</div>
@@ -5584,7 +5642,7 @@ function openTaskForm(id){
         <option value="" ${!t?.departmentId?'selected':''}>— 无 —</option>
         ${DB.departments.filter(d=>d.isActive!==false).map(d=>`<option value="${d.id}" ${t?.departmentId===d.id?'selected':''}>${h(d.name)}${d.type==='project'?' (项目)':''}</option>`).join('')}
       </select></div>
-    <div class="fg full"><label>执行人(可多选:个人 / 部门·项目组,选填)</label>
+    <div class="fg full" id="tf-fg-exec"><label>执行人(可多选:个人 / 部门·项目组,选填)</label>
       <input id="tf-exec-search" placeholder="🔍 搜索人员或部门..." autocomplete="off" oninput="_filterExecList(this.value)" style="margin-bottom:6px">
       <div id="tf-exec-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--sv);border-radius:8px;background:#fafbfc;padding:6px">
         ${execDepts.length?`<div style="font-size:11px;color:var(--ms);padding:3px 6px">部门 / 项目组</div>`:''}
@@ -5607,12 +5665,83 @@ function openTaskForm(id){
     <div class="fg"><label>标签(逗号分隔)</label>
       <input id="tf-tags" value="${v('tags')}" placeholder="如:重要,客户拓展,Q2"></div>
 
+    <div class="f-sect" id="tf-sub-sect" style="display:none">🗂 子任务(项目拆解)</div>
+    <div class="fg full" id="tf-sub-box" style="display:none">
+      <div id="tf-sub-list"></div>
+      <button type="button" class="btn btn-sm" onclick="_tfSubAdd()" style="margin-top:6px">+ 添加子任务</button>
+      <div style="font-size:11px;color:var(--ms);margin-top:4px">💡 每个子任务需填标题与责任人;截止日期留空则沿用项目截止日期。保存项目时逐条创建/更新子任务并通知责任人。</div>
+    </div>
+
     <div class="f-sect">进度说明(可选)</div>
     <div class="fg full"><label>进度说明(如状态为"进度缓慢/超前"请填写)</label>
       <textarea id="tf-blocker" placeholder="说明被什么卡住、需要谁帮助...">${v('blockerReason')}</textarea></div>
   </div>`,
   `<button class="btn" onclick="closeModal()">取消</button>
    <button class="btn btn-p" onclick="saveTask()">${id?'保存修改':'创建任务'}</button>`);
+
+  // v33.0.24:任务模式初始化 + 子任务编辑区(编辑项目时预填既有子任务)
+  _tfSubUsers = assignableUsers;
+  _tfSubtasks = (t && t.taskMode==='multi')
+    ? childTasksOf(t.id).map(k=>({id:k.id, title:k.title||'', assigneeId:k.assigneeId||'', dueDate:k.dueDate||'', priority:k.priority||'normal', _existing:true, _removed:false}))
+    : [];
+  _tfToggleMode();
+}
+
+// ── v33.0.24:任务模式切换 + 子任务编辑区(仅多任务/项目模式)──
+let _tfSubtasks = [];
+let _tfSubUsers = [];
+function _tfToggleMode(){
+  const multi = (document.getElementById('tf-mode')?.value||'single')==='multi';
+  // 父任务(项目容器)不直接执行/记进展:隐藏 类型/周期/进度/状态/执行人
+  ['tf-fg-type','tf-recur-box','tf-fg-prog','tf-fg-status','tf-fg-exec'].forEach(eid=>{
+    const el=document.getElementById(eid);
+    if(!el) return;
+    if(multi){ el.style.display='none'; }
+    else if(eid==='tf-recur-box'){ el.style.display=(document.getElementById('tf-type')?.value==='日常运营')?'block':'none'; }
+    else { el.style.display=''; }
+  });
+  const sect=document.getElementById('tf-sub-sect'), box=document.getElementById('tf-sub-box');
+  if(sect) sect.style.display = multi?'':'none';
+  if(box)  box.style.display  = multi?'':'none';
+  if(multi) _tfSubRender();
+}
+function _tfSubAdd(){
+  _tfSubtasks.push({id:null, title:'', assigneeId:currentUser?.id||'', dueDate:'', priority:'normal', _existing:false, _removed:false});
+  _tfSubRender();
+}
+function _tfSubRemove(i){
+  const row=_tfSubtasks[i];
+  if(!row) return;
+  if(row._existing){ row._removed=!row._removed; }   // 已保存的子任务:标记待删(保存时执行,可撤销)= 二次确认
+  else { _tfSubtasks.splice(i,1); }
+  _tfSubRender();
+}
+function _tfSubRender(){
+  const list=document.getElementById('tf-sub-list');
+  if(!list) return;
+  if(!_tfSubtasks.length){
+    list.innerHTML='<div style="border:2px dashed var(--sv);border-radius:8px;padding:14px;text-align:center;color:var(--ms);font-size:12px">暂无子任务,点击下方"+ 添加子任务"开始拆解</div>';
+    return;
+  }
+  list.innerHTML=_tfSubtasks.map((s,i)=>{
+    if(s._removed) return `<div style="display:flex;gap:8px;align-items:center;border:1px dashed #fca5a5;border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#fef2f2;font-size:12px;color:#991b1b">
+      🗑 将在保存时删除:${h(s.title||'(未命名)')}
+      <button type="button" class="btn btn-sm" onclick="_tfSubRemove(${i})" style="margin-left:auto;padding:3px 9px;font-size:11px">撤销</button>
+    </div>`;
+    return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--sv);border-radius:8px;padding:8px;margin-bottom:6px;background:#fafbfc">
+      <input placeholder="子任务标题 *" value="${h(s.title)}" oninput="_tfSubtasks[${i}].title=this.value" style="flex:2;min-width:150px">
+      <select onchange="_tfSubtasks[${i}].assigneeId=this.value" style="flex:1;min-width:110px" title="责任人(必选)">
+        <option value="" ${!s.assigneeId?'selected':''}>责任人 *</option>
+        ${_tfSubUsers.map(u=>`<option value="${u.id}" ${s.assigneeId===u.id?'selected':''}>${h(u.name||u.email||'未命名')}</option>`).join('')}
+      </select>
+      <input type="date" value="${h(s.dueDate||'')}" onchange="_tfSubtasks[${i}].dueDate=this.value" style="width:135px" title="截止日期(留空=项目截止)">
+      <select onchange="_tfSubtasks[${i}].priority=this.value" style="width:86px" title="优先级">
+        ${TSK_PRIORITY_KEYS.map(k=>`<option value="${k}" ${(s.priority||'normal')===k?'selected':''}>${TSK_PRIORITY[k].label}</option>`).join('')}
+      </select>
+      <button type="button" class="btn btn-d btn-sm" onclick="_tfSubRemove(${i})" style="padding:4px 9px" title="移除子任务">✕</button>
+      ${s._existing?`<span style="font-size:10px;color:var(--ms)">已保存</span>`:''}
+    </div>`;
+  }).join('');
 }
 
 async function saveTask(){
@@ -5638,20 +5767,42 @@ async function saveTask(){
   }
 
   const existing=editingTaskId?DB.tasks.find(t=>t.id===editingTaskId):null;
-  const status=document.getElementById('tf-status')?.value||'new';
+
+  // v33.0.24:任务模式 — 新建时由表单决定;编辑时锁定为已有模式(不允许单一↔多任务互转)
+  const taskMode = existing ? (existing.taskMode||'single')
+                            : (document.getElementById('tf-mode')?.value||'single');
+  const isMulti = taskMode==='multi';
+
+  let status=document.getElementById('tf-status')?.value||'new';
   let progress=parseInt(document.getElementById('tf-prog')?.value||'0',10);
   // 状态为 done 时进度强制 100,触发器也会做这件事,前端先同步显示
   if(status==='done') progress=100;
+  // v33.0.24:父任务(项目)的进度/状态由子任务汇总,不从表单读(表单已隐藏)
+  if(isMulti){ status = existing?.status||'new'; progress = existing?.progress||0; }
 
-  // v33.0.13:收集执行人多选(个人 / 部门)
-  const executors = Array.from(document.querySelectorAll('#tf-exec-list .tf-exec-cb:checked')).map(cb=>({
+  // v33.0.24:多任务(项目)校验 — 子任务标题/责任人必填;非 admin 指派他人需选部门(A2 同理)
+  if(isMulti){
+    const activeSubs = _tfSubtasks.filter(s=>!s._removed);
+    for(const s of activeSubs){
+      if(!(s.title||'').trim()){ toast('每个子任务必须填写标题','err'); return; }
+      if(!s.assigneeId){ toast(`子任务「${h(s.title.trim())}」必须选择责任人`,'err'); return; }
+    }
+    if(!isAdmin() && !deptId && activeSubs.some(s=>s.assigneeId!==currentUser?.id)){
+      toast('子任务指派给他人时,项目必须选择"所属部门/项目"','err');
+      document.getElementById('tf-dept')?.focus();
+      return;
+    }
+  }
+
+  // v33.0.13:收集执行人多选(个人 / 部门)— v33.0.24:父任务不设执行人
+  const executors = isMulti ? [] : Array.from(document.querySelectorAll('#tf-exec-list .tf-exec-cb:checked')).map(cb=>({
     type: cb.dataset.etype,
     id:   cb.value,
     name: cb.dataset.name||'',
   }));
 
-  // v33.0.18:日常运营周期更新字段(非日常运营 → 全部 null)
-  const taskType = document.getElementById('tf-type')?.value||null;
+  // v33.0.18:日常运营周期更新字段(非日常运营 → 全部 null)— v33.0.24:父任务不设类型/周期
+  const taskType = isMulti ? null : (document.getElementById('tf-type')?.value||null);
   let recurFreq=null, recurAnchor=null, recurEnd=null, recurNextDue=null;
   if(taskType==='日常运营'){
     recurFreq = document.getElementById('tf-recur-freq')?.value || null;
@@ -5698,6 +5849,8 @@ async function saveTask(){
     customerName:  cust?.companyName||'',
     createdBy:     existing?.createdBy||currentUser?.id,
     createdByName: existing?.createdByName||currentUser?.name||'',
+    taskMode,                                        /* v33.0.24 */
+    parentTaskId:  existing?.parentTaskId||null,     /* v33.0.24:编辑子任务时保留父链接 */
   };
 
   // v33.0.9 Batch2:可选"指派留言"(AI 起草或手填),随任务指派消息发送
@@ -5706,6 +5859,12 @@ async function saveTask(){
   const btn=document.querySelector('.modal-ft .btn-p');
   if(btn){btn.disabled=true;btn.textContent='保存中...';}
   await saveTaskToDB(obj, existing, assignMsg);
+  // v33.0.24:多任务(项目)— 父任务落库成功后,逐条 upsert/删除子任务,再回算父任务进度/状态
+  if(isMulti && DB.tasks.find(x=>x.id===obj.id)){
+    await _saveSubtasksFor(obj);
+    await recalcParentTask(obj.id);
+    refreshTasks?.();   // 回算后刷新列表,父任务行立即显示汇总进度
+  }
   if(btn){btn.disabled=false;btn.textContent=editingTaskId?'保存修改':'创建任务';}
   closeModal();
   _taskAttachReset();   // v33.0.14:保存后清空临时附件
@@ -5861,20 +6020,109 @@ async function saveTaskToDB(obj, existing, assignMsg){
   await loadDepartmentMembers();
   await loadTaskAssignees();  // v32.3:同步刷新协作者表
   await loadTaskExecutors();  // v33.0.13:同步刷新执行人表
+  if(obj.parentTaskId) await recalcParentTask(obj.parentTaskId);  // v33.0.24:子任务变动→父任务汇总
+}
+
+// ── v33.0.24:保存项目的子任务(复用 saveTaskToDB:含 task_assignees 主责任人同步 Z1.1 + 指派通知)──
+async function _saveSubtasksFor(parentObj){
+  for(const row of _tfSubtasks){
+    if(row._removed){
+      // 从父任务移除 = 删除该子任务行(表单内已有"待删/撤销"二次确认)
+      if(row.id && row._existing){
+        const {error}=await supa.from('tasks').delete().eq('id',row.id);
+        if(error) toast(`删除子任务「${h(row.title||'')}」失败:${error.message}`,'err');
+      }
+      continue;
+    }
+    const exChild = row.id ? DB.tasks.find(x=>x.id===row.id) : null;
+    const su = DB.profiles.find(p=>p.id===row.assigneeId);
+    const childObj = {
+      id:            row.id || uuid(),
+      title:         (row.title||'').trim(),
+      description:   exChild?.description||'',
+      category:      parentObj.category||'其他',
+      taskType:      exChild?.taskType||null,
+      recurFreq:     exChild?.recurFreq||null,
+      recurAnchor:   exChild?.recurAnchor??null,
+      recurEnd:      exChild?.recurEnd||null,
+      recurNextDue:  exChild?.recurNextDue||null,
+      priority:      row.priority||'normal',
+      status:        exChild?.status||'new',
+      progress:      exChild?.progress||0,
+      stage:         exChild?.stage||'',
+      blockerReason: exChild?.blockerReason||'',
+      startDate:     exChild?.startDate||parentObj.startDate||null,
+      dueDate:       row.dueDate||parentObj.dueDate||null,   // 留空沿用项目截止
+      completedAt:   exChild?.completedAt||null,
+      archivedAt:    exChild?.archivedAt||null,
+      assigneeId:    row.assigneeId,
+      assignerId:    exChild?.assignerId||currentUser?.id||null,   // 指派人=项目经理
+      departmentId:  parentObj.departmentId||null,
+      customerId:    parentObj.customerId||null,
+      tags:          exChild?.tags||'',
+      assigneeName:  su?.name||'',
+      assignerName:  exChild?.assignerName||currentUser?.name||'',
+      departmentName:parentObj.departmentName||'',
+      customerName:  parentObj.customerName||'',
+      createdBy:     exChild?.createdBy||currentUser?.id,
+      createdByName: exChild?.createdByName||currentUser?.name||'',
+      taskMode:      'single',
+      parentTaskId:  parentObj.id,
+    };
+    row.id = childObj.id; row._existing = true;
+    await saveTaskToDB(childObj, exChild, '');
+  }
+  // 兜底刷新:纯删除场景 saveTaskToDB 未跑,统一 reload 一次
+  await loadTasks();
+  await loadTaskProgress();
+}
+
+// ── v33.0.24:父任务进度/状态回算(进度=子任务平均;全部完成→已完成,有动工→进行中,否则新建)──
+async function recalcParentTask(parentId){
+  if(!parentId) return;
+  const parent = DB.tasks.find(x=>x.id===parentId);
+  if(!parent || !isParentTask(parent)) return;
+  if(parent.status==='archived') return;   // 已归档项目不回算
+  const kids = childTasksOf(parentId);
+  const progress = kids.length ? Math.round(kids.reduce((s,k)=>s+(Number(k.progress)||0),0)/kids.length) : 0;
+  const sts = kids.map(k=>normTaskStatus(k.status));
+  let status = 'new';
+  if(kids.length && sts.every(s=>s==='done')) status='done';
+  else if(sts.some(s=>['in_progress','slow','ahead','done'].includes(s))) status='in_progress';
+  const updateRow = {progress, status, updated_at: new Date().toISOString()};
+  if(status==='done' && !parent.completedAt) updateRow.completed_at = new Date().toISOString();
+  if(status!=='done' && parent.completedAt)  updateRow.completed_at = null;
+  const {error} = await supa.from('tasks').update(updateRow).eq('id', parentId);
+  if(error){ console.warn('[recalcParentTask]', error); return; }
+  // 本地 DB 同步,避免等下一轮 loadTasks
+  parent.progress = progress;
+  parent.status   = status;
+  if('completed_at' in updateRow) parent.completedAt = updateRow.completed_at;
+  saveCache();
 }
 
 async function deleteTaskFromDB(id){
+  const victim = DB.tasks.find(t=>t.id===id);                 // v33.0.24:删除前取,用于父子联动
+  const wasParent = victim && isParentTask(victim);
+  const parentId  = victim?.parentTaskId||null;
   const {error}=await supa.from('tasks').delete().eq('id',id);
   if(error){toast('删除失败:'+error.message,'err');return;}
+  // v33.0.24:删除项目时一并删除其全部子任务(confirmDelTask 已提示并二次确认)
+  if(wasParent){
+    const {error:e2}=await supa.from('tasks').delete().eq('parent_task_id', id);
+    if(e2) console.warn('[deleteTaskFromDB] 删除子任务失败:', e2);
+  }
   await loadTasks();
   await loadTaskProgress();
+  if(parentId) await recalcParentTask(parentId);              // v33.0.24:删除子任务后回算父任务
 }
 
 function confirmDelTask(id){
   const t=DB.tasks.find(x=>x.id===id);
   if(!t)return;
   if(!canDeleteTask(t)){toast('无权删除此任务','err');return;}
-  openConfirm(`确定删除任务"${h(t.title)}"?将同时删除其所有进展记录,不可恢复。`, async()=>{
+  const kidCnt = isParentTask(t) ? childTasksOf(t.id).length : 0;   // v33.0.24
+  openConfirm(`确定删除任务"${h(t.title)}"?将同时删除其所有进展记录${kidCnt?`及 ${kidCnt} 个子任务`:''},不可恢复。`, async()=>{
     closeModal();
     showLoading('删除中...');
     await deleteTaskFromDB(id);
@@ -5913,8 +6161,14 @@ function openTaskDetail(id){
     return ['slow','done','ahead','archived'].includes(s) ? s : '';
   })();
 
-  // 快捷状态流转按钮(根据当前状态计算可用动作)
-  const quickActs = renderTaskQuickActions(t, ce);
+  // v33.0.24:父子任务上下文
+  const isParent = isParentTask(t);
+  const kids = isParent ? childTasksOf(t.id) : [];
+  const kidsDone = kids.filter(k=>normTaskStatus(k.status)==='done').length;
+  const parentT = t.parentTaskId ? DB.tasks.find(x=>x.id===t.parentTaskId) : null;
+
+  // 快捷状态流转按钮(根据当前状态计算可用动作)— v33.0.24:父任务状态由子任务汇总,无快捷流转
+  const quickActs = isParent ? '' : renderTaskQuickActions(t, ce);
 
   // 信息字段
   const infoFields = [
@@ -6024,16 +6278,16 @@ function openTaskDetail(id){
   const body = `<div class="tsk-det-hdr ${hdrCls}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div style="flex:1;min-width:0">
-        <div class="det-co" style="word-break:break-word">${h(t.title)}</div>
+        <div class="det-co" style="word-break:break-word">${isParent?'<span style="background:rgba(255,255,255,.25);border-radius:8px;padding:2px 8px;font-size:12px;margin-right:6px;vertical-align:middle">📁 项目</span>':''}${h(t.title)}</div>
         <div class="det-meta">
-          ${pr.label}优先级 · ${st.label} · 进度 ${t.progress||0}%
+          ${pr.label}优先级 · ${st.label} · 进度 ${t.progress||0}%${isParent?'(子任务汇总)':''}
           ${t.dueDate?` · 截止 ${fd(t.dueDate)}`:''}
         </div>
         <div class="det-bdgs">
           <span class="det-bdg">${h(t.category||'其他')}</span>
           <span class="det-bdg">${h(t.assigneeName||getUserName(t.assigneeId))}</span>
           ${t.departmentName?`<span class="det-bdg">${h(t.departmentName)}</span>`:''}
-          <span class="det-bdg">${progressList.length} 条进展</span>
+          ${isParent?`<span class="det-bdg">🗂 子任务 完成${kidsDone}/共${kids.length}</span>`:`<span class="det-bdg">${progressList.length} 条进展</span>`}
         </div>
       </div>
       <button class="modal-cls" style="background:rgba(255,255,255,.15);color:#fff;border:none" onclick="closeModal()">×</button>
@@ -6043,16 +6297,42 @@ function openTaskDetail(id){
     ${collabHtml}
     ${quickActs}
 
+    ${parentT?`<div class="tsk-det-section">
+      <h4>📁 所属项目</h4>
+      <span class="bdg" style="cursor:pointer;background:#eef2ff;color:#3730a3;padding:6px 12px;font-size:12px" onclick="closeModal();openTaskDetail('${parentT.id}')" title="查看所属项目">📁 ${h(parentT.title)} ›</span>
+    </div>`:''}
+
     ${t.status==='slow' && t.blockerReason?`<div class="tsk-blocker-inline"><strong>⚠ 缓慢/超前说明:</strong> ${h(t.blockerReason)}</div>`:''}
 
     <div class="tsk-det-section">
-      <h4>📊 任务进度</h4>
+      <h4>📊 任务进度${isParent?'(由子任务汇总)':''}</h4>
       <div class="tsk-prog-big"><div class="prog-fill ${t.status==='slow'?'slow':''}" style="width:${t.progress||0}%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ms);margin-top:3px">
         <span>${t.progress||0}% 完成</span>
         <span class="${dCls}">${t.dueDate?dueLabel(t):'无截止日期'}</span>
       </div>
     </div>
+
+    ${isParent?`<div class="tsk-det-section">
+      <h4>🗂 子任务 · ${kids.length}(完成 ${kidsDone}/${kids.length})</h4>
+      ${kids.length===0
+        ? `<div style="border:2px dashed var(--sv);border-radius:8px;padding:18px;text-align:center;color:var(--ms);font-size:12px">暂无子任务${ce?',点击下方"✏️ 编辑"拆解子任务':''}</div>`
+        : kids.map(k=>{
+            const kst=TSK_STATUS[normTaskStatus(k.status)]||TSK_STATUS.new;
+            const kpr=TSK_PRIORITY[k.priority]||TSK_PRIORITY.normal;
+            return `<div onclick="closeModal();openTaskDetail('${k.id}')" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--sv);border-radius:8px;padding:9px 12px;margin-bottom:6px;cursor:pointer;background:#fafbfc">
+              <div style="flex:2;min-width:140px;font-size:13px;font-weight:600;color:var(--ink)">${h(k.title)}</div>
+              <span style="font-size:12px;color:var(--sl)">👤 ${h(k.assigneeName||getUserName(k.assigneeId))}</span>
+              <span><span class="bdg ${kpr.bdg}"><span class="pri-dot ${kpr.dot}"></span>${kpr.label}</span></span>
+              <span><span class="bdg ${kst.cls}">${kst.label}</span></span>
+              <div style="width:90px">
+                <div class="prog-bar"><div class="prog-fill ${k.status==='slow'?'slow':''}" style="width:${k.progress||0}%"></div></div>
+                <div class="prog-num">${k.progress||0}%</div>
+              </div>
+              ${k.dueDate?`<span class="${dueClass(k)}" style="font-size:11px">${dueLabel(k)}</span>`:''}
+            </div>`;
+          }).join('')}
+    </div>`:''}
 
     <div class="tsk-det-section">
       <h4>📋 基本信息</h4>
@@ -6079,7 +6359,7 @@ function openTaskDetail(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${progressList.length>0?`<button class="btn btn-ai btn-sm" id="ai-tsk-sum-btn" onclick="aiSummarizeTaskProgress('${t.id}')" style="font-size:11px">🤖 AI总结</button>`:''}
           <button class="btn btn-ai btn-sm" id="ai-tsk-next-btn" onclick="aiSuggestNextAction('${t.id}')" style="font-size:11px">💡 下一步建议</button>
-          ${canRecordProgress(t)?`<button class="btn btn-p btn-sm" onclick="openProgressForm('${t.id}')">+ 添加进展</button>`:''}
+          ${(!isParent&&canRecordProgress(t))?`<button class="btn btn-p btn-sm" onclick="openProgressForm('${t.id}')">+ 添加进展</button>`:''}
         </div>
       </div>
       <div id="ai-tsk-result-${t.id}" style="display:none;margin-bottom:10px;padding:10px 12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:8px;border:1px solid #c4b5fd;font-size:12px;color:var(--sl);line-height:1.7"></div>
@@ -6104,19 +6384,27 @@ function renderProgressTimelineItem(p, t, canDeleteTaskBy){
   const newSt = statusParts[1] ? normTaskStatus(statusParts[1].trim()) : '';
   const showStArrow = statusParts.length===2 && oldSt!==newSt;
   const canDelProg = isAdmin() || p.createdBy===currentUser?.id;
+  // v33.0.24:进展可编辑 — 记录本人 + 任务责任人(canEditTask 含负责人/指派人/创建人/leader)+ admin
+  const canEditProg = isAdmin() || p.createdBy===currentUser?.id || canEditTask(t);
   const ts = p.createdAt ? new Date(p.createdAt).toLocaleString('zh-CN',{hour12:false}) : '';
+  // v33.0.24:编辑留痕展示(edited/editedAt/editedBy)
+  const editedMark = p.edited
+    ? `<span style="font-size:10px;color:#92400e;background:#fef3c7;border-radius:7px;padding:1px 7px;margin-left:5px" title="内容被修订过,原始进度与作者未改动">✎ 已编辑${p.editedAt?` · ${new Date(p.editedAt).toLocaleString('zh-CN',{hour12:false})}`:''}${p.editedBy?` · ${h(getUserName(p.editedBy))}`:''}</span>`
+    : '';
 
   return `<div class="tsk-tl-item">
     <div class="tsk-tl-time">
       ${ts} · <strong>${h(p.createdByName||getUserName(p.createdBy))}</strong>
       ${showProgArrow?`<span class="tsk-prog-arrow">📈 ${p.progressBefore}% → ${p.progressAfter}%</span>`:''}
       ${showStArrow?`<span class="tsk-st-arrow">${TSK_STATUS[oldSt]?.label||oldSt} <span class="arr">→</span> ${TSK_STATUS[newSt]?.label||newSt}</span>`:''}
+      ${editedMark}
     </div>
     <div class="tsk-tl-body">${h(p.content)}</div>
     ${p.blockers?`<div class="tsk-tl-meta" style="color:#991b1b">📝 <strong>进度说明:</strong> ${h(p.blockers)}</div>`:''}
     ${p.nextAction?`<div class="tsk-tl-meta">📌 <strong>下一步:</strong> ${h(p.nextAction)}</div>`:''}
-    ${canDelProg?`<div class="tsk-tl-meta" style="text-align:right">
-      <button class="btn btn-d btn-sm" style="padding:3px 8px;font-size:11px" onclick="confirmDelProgress('${p.id}','${t.id}')">删除</button>
+    ${(canEditProg||canDelProg)?`<div class="tsk-tl-meta" style="text-align:right">
+      ${canEditProg?`<button class="btn btn-sm" style="padding:3px 8px;font-size:11px" onclick="openEditProgressForm('${p.id}','${t.id}')">✏️ 编辑</button>`:''}
+      ${canDelProg?`<button class="btn btn-d btn-sm" style="padding:3px 8px;font-size:11px" onclick="confirmDelProgress('${p.id}','${t.id}')">删除</button>`:''}
     </div>`:''}
   </div>`;
 }
@@ -6217,6 +6505,7 @@ async function applyStatusChange(t, targetStatus, blockerReason){
   toast(`已切换为「${TSK_STATUS[targetStatus]?.label||targetStatus}」`);
   await loadTasks();
   await loadTaskProgress();
+  if(t.parentTaskId) await recalcParentTask(t.parentTaskId);  // v33.0.24:子任务状态变→父任务汇总
   // 详情页保持打开,重新渲染
   closeModal();
   openTaskDetail(t.id);
@@ -6238,11 +6527,62 @@ function confirmDelProgress(progressId, taskId){
   });
 }
 
+// ── v33.0.24:进展记录编辑(修订文字内容 + 留痕;不改原始进度/作者/时间)──
+function openEditProgressForm(progressId, taskId){
+  const p = DB.taskProgress.find(x=>x.id===progressId);
+  if(!p){toast('进展不存在','err');return;}
+  const t = DB.tasks.find(x=>x.id===taskId||x.id===p.taskId);
+  const canEditProg = isAdmin() || p.createdBy===currentUser?.id || (t&&canEditTask(t));
+  if(!canEditProg){toast('无权编辑此进展','err');return;}
+  openModal(`✏️ 编辑进展记录`,`
+  <div class="form-grid">
+    <div class="fg full" style="font-size:11px;color:var(--ms)">
+      原记录:${p.createdAt?new Date(p.createdAt).toLocaleString('zh-CN',{hour12:false}):''} · ${h(p.createdByName||getUserName(p.createdBy))}
+      ${(p.progressBefore!==null&&p.progressAfter!==null&&p.progressBefore!==p.progressAfter)?` · 📈 ${p.progressBefore}% → ${p.progressAfter}%`:''}
+      <br>💡 编辑仅修订文字内容并留痕;原始进度、作者与时间不变。
+    </div>
+    <div class="fg full"><label>进展内容<span class="req">*</span></label>
+      <textarea id="pe-content">${h(p.content||'')}</textarea>
+      <span class="err-m" id="e-pe-content"></span></div>
+    <div class="fg full"><label>遇到的问题/困难(可选)</label>
+      <textarea id="pe-blockers">${h(p.blockers||'')}</textarea></div>
+    <div class="fg full"><label>下一步计划(可选)</label>
+      <textarea id="pe-next">${h(p.nextAction||'')}</textarea></div>
+  </div>`,
+  `<button class="btn" onclick="closeModal()">取消</button>
+   <button class="btn btn-p" onclick="saveProgressEdit('${p.id}','${t?t.id:''}')">保存修订</button>`);
+}
+
+async function saveProgressEdit(progressId, taskId){
+  const p = DB.taskProgress.find(x=>x.id===progressId);
+  if(!p){toast('进展不存在','err');return;}
+  const content = document.getElementById('pe-content')?.value.trim()||'';
+  if(!content){document.getElementById('e-pe-content').textContent='必填';return;}
+  const blockers   = document.getElementById('pe-blockers')?.value.trim()||'';
+  const nextAction = document.getElementById('pe-next')?.value.trim()||'';
+  const btn=document.querySelector('.modal-ft .btn-p');
+  if(btn){btn.disabled=true;btn.textContent='保存中...';}
+  // 只 update 文字字段 + 留痕三列;绝不动 progress_before/progress_after/created_by/created_at
+  const {error} = await supa.from('task_progress').update({
+    content, blockers, next_action: nextAction,
+    edited: true,
+    edited_at: new Date().toISOString(),
+    edited_by: currentUser?.id || null,
+  }).eq('id', progressId);
+  if(btn){btn.disabled=false;btn.textContent='保存修订';}
+  if(error){toast('保存修订失败:'+error.message,'err');return;}
+  closeModal();
+  toast('进展已修订');
+  await loadTaskProgress();
+  if(taskId) openTaskDetail(taskId);
+}
+
 // 占位:进展表单将在 Step 4 完整实现,Step 3 提供基础版以便测试
 let editingProgressTaskId=null;
 function openProgressForm(taskId){
   const t=DB.tasks.find(x=>x.id===taskId);
   if(!t){toast('任务不存在','err');return;}
+  if(isParentTask(t)){toast('项目(多任务)不直接记录进展,请在其子任务中记录','err');return;}  // v33.0.24
   if(!canRecordProgress(t)){toast('无权对此任务添加进展','err');return;}
   editingProgressTaskId=taskId;
   openModal(`📝 添加进展 - ${h(t.title)}`,`
@@ -6382,6 +6722,11 @@ async function saveProgress(){
 
   await loadTasks();
   await loadTaskProgress();
+  // v33.0.24:子任务记进展后回算父任务进度/状态(平均 + 完成判定)
+  if(t.parentTaskId){
+    await recalcParentTask(t.parentTaskId);
+    refreshTasks?.();
+  }
   // 如果当前还在任务详情页(或刚才是从详情页弹出的),保存后重新打开详情页
   if(curPage==='tasks'||curPage==='teamTasks'||curPage==='archive'){
     if(returnTaskId) openTaskDetail(returnTaskId);
